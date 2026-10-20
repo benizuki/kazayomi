@@ -1,0 +1,39 @@
+# ── Node / Vite ──
+node_modules/
+**/node_modules/
+dist
+dist-ssr
+*.local
+*.tsbuildinfo
+
+# ── Python ──
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+
+# ── 秘密情報・実行時データ ──
+.env
+.env.local
+backend/.env
+backend/data/
+
+# ── ログ ──
+logs
+*.log
+npm-debug.log*
+
+# ── エディタ / OS ──
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# ── Claude Code のローカル設定 ──
+.claude/
+
+# ── 公開しない（自宅の環境の値が入っている、本番のマニフェスト・ビルド・手順）──
+deploy/k3s/
+Makefile
+docs/deploy.md

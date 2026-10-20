@@ -1,0 +1,166 @@
+/* デザイントークン。見た目に関する値は、原則ここにしか書かない。
+ *
+ * 色・文字サイズ・余白・角丸・部品の高さを、それぞれ「用途の名前」で持たせている。
+ * コンポーネント側に生の px や hex を書き始めると、あとから
+ * 「一覧だけ 13px、ダイアログだけ 12px」のような不揃いが必ず生まれ、
+ * それを直すために全画面へ font-size を上書きするファイルを書く羽目になる。
+ *
+ * 配色は Hinami・ayatori と同じ「和紙・墨・苔色」（中立色は暖色、ブランドは苔色、濃い面は墨の茶）。
+ * ダークは同じ色相のまま暗くした「夜の和紙」。
+ *
+ * トークンを足すときは「その値が何のためのものか」で名前を付ける。
+ * --teal-500 のような色そのものの名前ではなく、--text-brand のように役割で付ける。
+ *
+ * ── ライト / ダークの持ち方 ────────────────────────────────
+ *
+ * 色は light-dark(ライト値, ダーク値) で **1 行に両方**書く。
+ * どちらが使われるかは、その要素の color-scheme で決まる。
+ *
+ *   指定なし                   → color-scheme: light dark → **OS の設定に従う**
+ *   <html data-theme="light">  → color-scheme: light      → 常にライト
+ *   <html data-theme="dark">   → color-scheme: dark       → 常にダーク
+ *
+ * ライトとダークを別ブロックに分けると、片方だけトークンを足して
+ * もう一方で色が消える事故が起きる。1 行にまとめれば構造上あり得ない。
+ *
+ * color-scheme を宣言しているので、スクロールバーやネイティブの
+ * 日付ピッカーなど**ブラウザ側が描く部品も一緒に切り替わる**。
+ *
+ * 必要ブラウザ: Chrome 123+ / Edge 123+ / Safari 17.5+ / Firefox 120+。
+ * これより古い環境が対象なら light-dark() をやめ、:root と
+ * @media (prefers-color-scheme: dark) と :root[data-theme="dark"] の
+ * 3 ブロックに展開する（値が 3 か所に散るので、増やすときは全部に足す）。
+ */
+
+:root {
+  /* この 1 行が切り替えの土台。消すと light-dark() が常にライト値になる。 */
+  color-scheme: light dark;
+
+  /* ------------------------------------------------------------------
+   * 文字色（ink）
+   * 番号が上がるほど控えめになる。ink-1〜4 はどの surface の上でも
+   * WCAG AA（4.5:1）を満たす値にしてある。この保証があるので、
+   * 「この背景だと薄すぎないか」を毎回確かめなくてよい。
+   * 色を変えたら `npm run check:contrast` で保証が壊れていないか確認する。
+   * ink-muted は AA を満たさない。区切り線や装飾にだけ使い、文字には使わない。
+   * ------------------------------------------------------------------ */
+  --ink-1: light-dark(#3a2e24, #f3ebdf);   /* 見出し、強調したい値 */
+  --ink-2: light-dark(#45382d, #e2d6c6);   /* 本文 */
+  --ink-3: light-dark(#56483b, #cbbcaa);   /* 副次的な説明 */
+  --ink-4: light-dark(#635444, #b6a693);   /* ラベル、表のヘッダ */
+  --ink-muted: light-dark(#a89c8b, #7d6f60);
+
+  /* 文字色（状態）。背景の surface-* と対で使う */
+  --text-brand: light-dark(#4a6d41, #9ec48f);
+  --text-warn: light-dark(#8c572b, #e6b07a);
+  --text-danger: light-dark(#a6443a, #f0948a);
+  --text-info: light-dark(#466687, #9cbde0);
+
+  /* 濃い面・塗りつぶしの上に載せる文字。テーマで変えない */
+  --text-on-solid: #ffffff;
+  --text-on-inverse: #f8efe0;
+  --text-on-inverse-muted: #cbb79d;
+
+  /* ------------------------------------------------------------------
+   * 面（surface）。page < card の順に手前。muted / raised は同じカード内の段差
+   * ------------------------------------------------------------------ */
+  --surface-page: light-dark(#f7f2e8, #1b1612);
+  --surface-card: light-dark(#fffdf8, #241e19);
+  --surface-subtle: light-dark(#fbf7ef, #201a16);
+  --surface-muted: light-dark(#f0e9db, #2d261f);
+  --surface-raised: light-dark(#e6dcc9, #3a3128);
+
+  /* 状態の面。文字は同じ状態の text-* を載せる */
+  --surface-accent: light-dark(#e9efdf, #28331f);
+  --surface-warn: light-dark(#faeee2, #3a2c1c);
+  --surface-danger: light-dark(#faeae7, #3a2320);
+  --surface-info: light-dark(#edf0fa, #1e2a3d);
+
+  /* 塗りつぶし。文字は --text-on-solid */
+  --surface-accent-solid: light-dark(#4d6f45, #4f7346);
+  --surface-warn-solid: light-dark(#a8602a, #a8602a);
+  --surface-danger-solid: light-dark(#b8504a, #b5544a);
+  --surface-info-solid: light-dark(#4e6fb8, #5674bb);
+
+  /* 反転面（サイドバーなど） */
+  --surface-inverse: light-dark(#4a3b2e, #15110d);
+  --surface-inverse-deep: light-dark(#3a2e24, #0f0c09);
+
+  /* ------------------------------------------------------------------
+   * 罫線（border）
+   * ------------------------------------------------------------------ */
+  --border-subtle: light-dark(#efe8da, #2b241e);
+  --border-default: light-dark(#e6dccb, #382f27);
+  --border-mid: light-dark(#d8cbb5, #47392f);
+  --border-brand: light-dark(#9db58f, #5f7d55);
+  --border-warn: light-dark(#efdcc8, #4a3a26);
+  --border-danger: light-dark(#ead8d4, #4a2f2b);
+  --border-inverse: light-dark(#67513d, #4a3b2e);
+
+  /* ------------------------------------------------------------------
+   * 文字サイズ。7 段だけ。ここに無いサイズを使いたくなったら、
+   * まず既存の段で足りないかを疑う。本文 14px、一覧・フォームは 13px。
+   * ------------------------------------------------------------------ */
+  --fs-2xs: 11px;   /* 単位、グラフの軸ラベル */
+  --fs-xs: 12px;    /* 補足、タイムスタンプ */
+  --fs-sm: 13px;    /* 一覧・フォーム・チップの既定 */
+  --fs-md: 14px;    /* 本文の既定 */
+  --fs-lg: 16px;    /* カード・パネルの見出し */
+  --fs-xl: 20px;    /* 画面見出し */
+  --fs-2xl: 25px;   /* KPI などの数値 */
+
+  /* 行間。見出しは詰め、読ませる文章は広く取る */
+  --lh-tight: 1.45;
+  --lh-normal: 1.65;
+  --lh-relaxed: 1.8;
+
+  /* 太さは 3 段だけ。600 や 750 を混ぜると、フォントによって
+     再現されたりされなかったりして、画面ごとに太さがぶれる */
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-bold: 700;
+
+  /* 余白（4px 刻み）。gap も padding も margin もこの段から選ぶ */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+
+  /* 角丸。4 段だけ。pill は状態バッジ専用 */
+  --radius-sm: 6px;     /* チップ、入力欄、小さいボタン */
+  --radius-md: 10px;    /* カード内のブロック、補足枠 */
+  --radius-lg: 14px;    /* カード、ダイアログ */
+  --radius-pill: 999px; /* 状態バッジのみ */
+
+  /* 部品の高さ。横並びにしたときに 1px ずれるのを防ぐ基準 */
+  --control-sm: 32px;
+  --control-md: 40px;   /* 既定 */
+  --control-lg: 48px;
+
+  /* 影。業務画面では影を強くしない。段差は罫線で表す。
+     影は色ではないので light-dark() を直接使えない。色だけ切り替える */
+  --shadow-color: light-dark(rgba(58, 46, 36, .08), rgba(0, 0, 0, .5));
+  --shadow-card: 0 1px 2px var(--shadow-color);
+  --shadow-overlay: 0 12px 32px -16px var(--shadow-color);
+
+  /* フォント。英数字が先、日本語が後。
+     逆にすると英数字まで日本語フォントで描かれる */
+  --font-sans: 'DM Sans', 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* 利用者が明示的に選んだときだけ OS の設定を上書きする。
+ * data-theme が無ければ OS に従う（上の color-scheme: light dark）。
+ *
+ * この属性は composables/useThemeMode.ts が <html> に付け外しし、
+ * 初回描画のちらつきを防ぐために public/theme-init.js が
+ * アプリ起動前に同じ属性を復元している。
+ *
+ * サイズ・余白・角丸はテーマで変えない。変えると同じ画面が別物になり、
+ * 片方のテーマでしか確認されていないレイアウト崩れが生まれる。 */
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"]  { color-scheme: dark; }

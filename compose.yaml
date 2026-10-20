@@ -1,0 +1,94 @@
+# kazayomi 一式（kazayomi・Ayame・Valkey）をまとめて起動する。
+#   docker compose up -d --build
+# 画面: http://<この PC の IP>:8080 / シグナリング: ws://<この PC の IP>:3000/signaling
+#
+# 開発時（kazayomi をコンテナの外で uv run するとき）は、Ayame・Valkey・rustfs だけを起動する:
+#   docker compose --profile dev up -d ayame-dev valkey rustfs
+services:
+  kazayomi:
+    build: .
+    ports:
+      - "8080:8080"
+      # Ayame は kazayomi と同じネットワーク名前空間で動くので、Ayame のポートもここで公開する
+      - "3000:3000"
+    environment:
+      TZ: Asia/Tokyo
+      DATA_DIR: /data
+      VALKEY_URL: valkey://valkey:6379/0
+      # 画像の置き場（rustfs）。アクセスキーは .env の RUSTFS_ACCESS_KEY / RUSTFS_SECRET_KEY
+      S3_ENDPOINT_URL: http://rustfs:9000
+      S3_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?RUSTFS_ACCESS_KEY を .env に設定してください}
+      S3_SECRET_KEY: ${RUSTFS_SECRET_KEY:?RUSTFS_SECRET_KEY を .env に設定してください}
+      S3_BUCKET: ${S3_BUCKET:-kazayomi}
+      # 認証 Webhook は 127.0.0.1（同じ名前空間の Ayame）からだけ受ける
+      AYAME_WEBHOOK_ALLOWED_IPS: 127.0.0.1,::1
+      AYAME_WEBHOOK_SECRET: ${AYAME_WEBHOOK_SECRET:-}
+      # 登録 QR に入れる kazayomi の URL（Kazami から届くもの）。空なら画面を開いている URL
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      # ログイン。APP_SESSION_SECRET と GOOGLE_OAUTH_CLIENT_ID は .env（compose.yaml と同じ場所）に書く
+      APP_SESSION_SECRET: ${APP_SESSION_SECRET:?APP_SESSION_SECRET を .env に設定してください}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      BOOTSTRAP_ADMIN_EMAILS: ${BOOTSTRAP_ADMIN_EMAILS:-}
+      OPERATOR_NAME: ${OPERATOR_NAME:-}
+      OPERATOR_CONTACT: ${OPERATOR_CONTACT:-}
+      SESSION_HTTPS_ONLY: ${SESSION_HTTPS_ONLY:-false}
+      CORS_ALLOWED_ORIGINS: http://localhost:8080
+    volumes:
+      - kazayomi-data:/data
+    depends_on: [valkey, rustfs]
+    restart: unless-stopped
+
+  ayame:
+    build: ./deploy/ayame
+    # kazayomi と同じネットワーク名前空間に入れる。認証 Webhook を http://127.0.0.1:8080 で呼べるので、
+    # kazayomi を公開しても Webhook は外から呼べない（kazayomi は 127.0.0.1 からの呼び出しにだけ答える）。
+    # kazayomi のコンテナを作り直したら、Ayame も作り直される（docker compose up -d で一緒に直る）
+    network_mode: "service:kazayomi"
+    depends_on: [kazayomi]
+    volumes:
+      - ./deploy/ayame/config.ini:/config.ini:ro
+    restart: unless-stopped
+
+  # 開発用の Ayame（kazayomi をコンテナの外で動かすとき）。Webhook は host.docker.internal 経由で手元の kazayomi を呼ぶ
+  ayame-dev:
+    build: ./deploy/ayame
+    profiles: [dev]
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./deploy/ayame/config.dev.ini:/config.ini:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  valkey:
+    image: valkey/valkey:8.1-alpine
+    # トークン類とゲストの一時的なルーム。AOF で保存し、再起動してもゲストが QR を読み直さずに済むようにする
+    command: ["valkey-server", "--dir", "/data", "--save", "", "--appendonly", "yes", "--appendfsync", "everysec"]
+    volumes:
+      - valkey-data:/data
+    restart: unless-stopped
+
+  # 画像の置き場（S3 互換）。
+  # API（9000）とコンソール（9001）は、この PC の中からだけ届くようにする（kazayomi はコンテナ間でつなぐ）
+  rustfs:
+    image: rustfs/rustfs:1.0.2
+    command: ["/data"]
+    environment:
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?RUSTFS_ACCESS_KEY を .env に設定してください}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?RUSTFS_SECRET_KEY を .env に設定してください}
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - rustfs-data:/data
+    restart: unless-stopped
+
+volumes:
+  kazayomi-data:
+  rustfs-data:
+  valkey-data:

@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ログイン | kazayomi</title>
+    <!-- Google Identity Services。ここだけは外部スクリプトを読む必要がある。 -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f4efe6;
+        --panel: rgba(255, 252, 246, 0.92);
+        --text: #1f2937;
+        --muted: #5b6472;
+        --line: rgba(31, 41, 55, 0.1);
+        --accent-strong: #115e59;
+        --shadow: 0 24px 80px rgba(15, 23, 42, 0.14);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Avenir Next", "Hiragino Sans", "Yu Gothic", sans-serif;
+        color: var(--text);
+        background: var(--bg) url("/kazayomi-login-hero.png") center center / cover no-repeat;
+        display: grid;
+        align-items: center;
+        justify-items: start;
+        padding: 32px clamp(24px, 7vw, 112px);
+      }
+      .card {
+        width: min(100%, 460px);
+        background: rgba(255, 252, 246, 0.94);
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        box-shadow: var(--shadow);
+        padding: 32px;
+      }
+      @media (max-width: 700px) {
+        body {
+          justify-items: center;
+          background-position: 64% center;
+          padding: 24px;
+        }
+        .card { background: rgba(255, 252, 246, 0.97); }
+      }
+      .eyebrow {
+        display: inline-block;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        color: var(--accent-strong);
+        background: rgba(15, 118, 110, 0.1);
+      }
+      h1 { margin: 16px 0 12px; font-size: clamp(28px, 5vw, 36px); line-height: 1.15; }
+      p.lead { margin: 0 0 24px; color: var(--muted); font-size: 14px; line-height: 1.7; }
+      .signin { display: grid; place-items: center; margin: 8px 0 4px; }
+      .status { margin-top: 16px; font-size: 13px; color: var(--muted); min-height: 20px; }
+      .status.error { color: #8c3d1f; }
+      .status.done { color: var(--accent-strong); }
+      .guest h2 { margin: 0 0 6px; font-size: 17px; }
+      .guest .note { margin: 0 0 14px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+      .guest { margin-top: 8px; }
+      /* 管理者のログインは運営者だけが使うので、控えめに出す */
+      .member { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--line); }
+      .member h2 { margin: 0 0 4px; font-size: 13px; color: var(--muted); font-weight: 600; }
+      .member .note { margin: 0 0 10px; color: var(--muted); font-size: 12px; }
+      .check { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0 16px; font-size: 13px; line-height: 1.6; }
+      .check input { margin-top: 3px; }
+      .check a, .guest a { color: var(--accent-strong); }
+      /* 未登録のアカウントでサインインしたときの、招待とグループ作成 */
+      .onboarding { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); }
+      [hidden] { display: none !important; }
+      .onboarding h2 { margin: 20px 0 8px; font-size: 17px; }
+      .onboarding .who { margin: 0; font-size: 13px; color: var(--muted); }
+      .onboarding .account { color: var(--text); font-weight: 600; word-break: break-all; }
+      .onboarding .note { margin: 0 0 16px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+      .invitations { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+      .invitation {
+        display: flex; align-items: center; gap: 12px;
+        padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: #fffdf9;
+      }
+      .invitation .name { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+      .invitation .role { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; font-weight: 400; }
+      .confirm dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0 0 16px; font-size: 14px; }
+      .confirm dt { color: var(--muted); }
+      .confirm dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+      .field { display: grid; gap: 6px; margin-bottom: 14px; font-size: 13px; }
+      .field span { color: var(--muted); }
+      .field input, .field textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid rgba(31, 41, 55, 0.22);
+        border-radius: 10px;
+        background: #fffdf9;
+        color: var(--text);
+        font: inherit;
+        font-size: 14px;
+      }
+      .field input:focus, .field textarea:focus { outline: 2px solid rgba(17, 94, 89, 0.35); border-color: var(--accent-strong); }
+      .field textarea { min-height: 72px; resize: vertical; }
+      .actions { display: flex; justify-content: flex-end; gap: 8px; }
+      .guest .actions { justify-content: space-between; }
+      button {
+        padding: 10px 18px;
+        border: 0;
+        border-radius: 999px;
+        background: var(--accent-strong);
+        color: #fff;
+        font: inherit;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      button[disabled] { opacity: 0.55; cursor: default; }
+      button.secondary { background: transparent; color: var(--muted); }
+      button.secondary-solid { background: transparent; color: var(--accent-strong); border: 1px solid var(--accent-strong); }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <span class="eyebrow">SIGN IN</span>
+      <h1>kazayomi</h1>
+
+      <!-- ゲスト: Google ログインなしで、ニックネームだけで一時的なルームを使う。受け付けるときだけ出す -->
+      <form class="guest" id="guest" hidden>
+        <h2>ゲストとして試す</h2>
+        <p class="note">
+          アカウントなしで、一時的なルームで Kazami の映像を見られます。メールアドレスは要りません。
+          ニックネームも撮像した画像もサーバには保存しません。ルームは使わないまま 24 時間たつと消えます。
+        </p>
+        <label class="field">
+          <span>ニックネーム（本名でなくてかまいません）</span>
+          <input id="guest-nickname" maxlength="30" required autocomplete="nickname" placeholder="例: たろう" />
+        </label>
+        <label class="check">
+          <input type="checkbox" id="guest-agree" />
+          <span><a href="/terms" target="_blank" rel="noopener">利用規約</a>と<a href="/privacy" target="_blank" rel="noopener">プライバシーポリシー</a>に同意します</span>
+        </label>
+        <div class="actions">
+          <button type="button" class="secondary" id="resume-open">再開コードで戻る</button>
+          <button type="submit" id="guest-start" disabled>ゲストとして始める</button>
+        </div>
+      </form>
+
+      <!-- 前のゲストのルームに、再開コードで戻る（ログアウトしたあと・別のブラウザから） -->
+      <form class="guest" id="resume" hidden>
+        <h2>再開コードで戻る</h2>
+        <p class="note">ルームの画面に出ている再開コードを入れると、前のルームに戻れます。ニックネームは保存していないので、もう一度入れてください。</p>
+        <label class="field">
+          <span>再開コード</span>
+          <input id="resume-code" maxlength="20" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="例: KZ7Q-M2PX-9TRD" />
+        </label>
+        <label class="field">
+          <span>ニックネーム</span>
+          <input id="resume-nickname" maxlength="30" required autocomplete="nickname" placeholder="例: たろう" />
+        </label>
+        <div class="actions">
+          <button type="button" class="secondary" id="resume-back">新しく始める</button>
+          <button type="submit" id="resume-start" disabled>戻る</button>
+        </div>
+      </form>
+      <div class="status" id="status"></div>
+
+      <!-- 管理者（運営者）: Google でログインする。利用者はゲストなので、下に小さく置く -->
+      <section class="member">
+        <h2>管理者のログイン</h2>
+        <p class="note">運営者用です。登録されている Google アカウントでログインします。</p>
+        <div class="signin" id="google-signin"></div>
+      </section>
+
+      <!-- 招待されたアカウントでサインインしたときだけ出す -->
+      <section class="onboarding" id="onboarding" hidden>
+        <p class="who"><span class="account" id="onboarding-email"></span> に届いている招待です。</p>
+        <ul class="invitations" id="invitations"></ul>
+      </section>
+
+    </main>
+
+    <!-- インラインの script は CSP（script-src 'self'）で止まるので、別ファイルにしている。
+         値は data 属性で渡す（backend 側で HTML エスケープ済み）。 -->
+    <div id="login-config" hidden
+         data-client-id="__GOOGLE_CLIENT_ID__"
+         data-config-error="__GOOGLE_OAUTH_CONFIG_ERROR__"
+         data-redirect="__LOGIN_REDIRECT__"
+         data-guest-enabled="__GUEST_ENABLED__"
+         data-terms-version="__TERMS_VERSION__"></div>
+    <script src="/auth/login.js"></script>
+  </body>
+</html>

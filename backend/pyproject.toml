@@ -1,0 +1,36 @@
+[project]
+name = "kazayomi-backend"
+version = "0.1.0"
+description = "Kazami と Ayame で接続するビューアのバックエンド"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3>=1.43.113",
+    "fastapi>=0.143.0",
+    "google-auth>=2.62.0",
+    "gunicorn>=26.2.0",
+    "itsdangerous>=2.2.0",
+    "pillow>=12.3.0",
+    "python-dotenv>=1.2.4",
+    "python-multipart>=0.0.32",
+    "requests>=2.34.2",
+    "uvicorn[standard]>=0.54.0",
+    "valkey>=6.1.1",
+    "websockets>=17.2",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.13.1",
+    "moto>=5.2.4",
+    "pytest>=9.1.1",
+]
+
+[tool.uv]
+package = false
+resolution = "highest"
+
+# 既定のインデックスは Takumi Guard（公開されて間もない版は、少し遅れて入る。悪意のある版を避けるため）
+[[tool.uv.index]]
+name = "takumi-guard"
+url = "https://pypi.flatt.tech/simple/"
+default = true
