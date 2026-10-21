@@ -2,12 +2,15 @@
   <div class="single">
     <section class="stage">
       <VideoPlayer
+        class="stage__player"
         :stream="conn.stream.value"
         :muted="!speakerOn"
         :placeholder="placeholder"
         :busy="isBusy"
         :pickable="canFocusRemotely"
+        :pointer-color="pointer.playerColor.value"
         @pick="focusAt"
+        @pointer="pointer.send"
       >
         <div class="stage__badge">
           <span class="chip chip--pill" :class="statusChipClass">{{ statusLabel }}</span>
@@ -17,7 +20,9 @@
           </span>
         </div>
         <transition name="flash"><div v-if="flash" class="stage__flash" /></transition>
+        <ChatSent :messages="chat.visible.value" />
       </VideoPlayer>
+      <ChatInput :chat="chat" />
     </section>
 
     <aside class="side">
@@ -67,6 +72,20 @@
           >
             <v-icon :icon="conn.micOn.value ? 'mdi-microphone' : 'mdi-microphone-off'" />
             <v-tooltip activator="parent" location="bottom">{{ conn.micOn.value ? 'マイクを切る' : 'マイクを入れる' }}</v-tooltip>
+          </v-btn>
+          <!-- レーザーポインター。映像の上をドラッグすると、Kazami の画面の同じ位置に出る -->
+          <v-btn
+            icon
+            size="small"
+            :color="pointer.on.value ? 'error' : undefined"
+            :variant="pointer.on.value ? 'flat' : 'outlined'"
+            :disabled="!pointer.available.value"
+            :aria-label="pointer.on.value ? 'ポインターを止める' : 'ポインターを使う'"
+            :aria-pressed="pointer.on.value"
+            @click="pointer.toggle()"
+          >
+            <v-icon icon="mdi-laser-pointer" />
+            <v-tooltip activator="parent" location="bottom">{{ pointer.on.value ? 'ポインターを止める' : 'ポインター（映像をドラッグして Kazami の画面に指し示す）' }}</v-tooltip>
           </v-btn>
           <v-spacer />
           <!-- 撮像した画像は、サーバに預けずにこのブラウザへダウンロードする -->
@@ -177,11 +196,15 @@ import QRCode from 'qrcode'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import CameraControlPanel from '@/components/CameraControlPanel.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import ChatInput from '@/components/ChatInput.vue'
+import ChatSent from '@/components/ChatSent.vue'
 import VideoPlayer from '@/components/VideoPlayer.vue'
 import { copyToClipboard } from '@/composables/clipboard'
 import { formatDateTime } from '@/composables/format'
 import { useAyameConnection } from '@/composables/useAyameConnection'
 import { useDirectCapture } from '@/composables/useDirectCapture'
+import { useChat } from '@/composables/useChat'
+import { usePointer } from '@/composables/usePointer'
 import { issueGuestEnrollment, issueGuestTicket, guestSignalingUrl, useGuestRoom } from '@/composables/useGuestRoom'
 import type { GuestEnrollment } from '@/types'
 
@@ -195,6 +218,8 @@ const conn = useAyameConnection({
   audio:        true,
 })
 const capturer = useDirectCapture(conn)
+const pointer = usePointer(conn)
+const chat = useChat(conn)
 
 const speakerOn = ref(false)
 const canTalk = computed(() => conn.status.value === 'connected' && conn.remoteHasAudio.value)
@@ -371,7 +396,8 @@ onBeforeUnmount(() => {
   height: calc(100dvh - var(--app-top));
   padding: var(--sp-4);
 }
-.stage { min-height: 0; }
+.stage { display: flex; flex-direction: column; gap: var(--sp-2); min-height: 0; }
+.stage__player { flex: 1 1 0; min-height: 0; height: auto; }
 .stage__badge { position: absolute; top: var(--sp-3); left: var(--sp-3); display: flex; align-items: center; gap: var(--sp-2); }
 .stage__stats {
   padding: 2px var(--sp-2);
@@ -426,6 +452,6 @@ onBeforeUnmount(() => {
 
 @media (max-width: 900px) {
   .single { grid-template-columns: 1fr; height: auto; }
-  .stage { aspect-ratio: 16 / 9; }
+  .stage__player { flex: none; aspect-ratio: 16 / 9; }
 }
 </style>

@@ -40,6 +40,8 @@ button { cursor: pointer; }
   outline: 2px solid var(--border-brand);
   outline-offset: 2px;
 }
+/* Vuetify の入力欄は、フォーカスすると自分で枠を太くする。中の input にも枠を付けると二重に見えるので付けない */
+.v-field__input:focus-visible { outline: none; }
 
 /* ------------------------------------------------------------------
  * 見出しと本文

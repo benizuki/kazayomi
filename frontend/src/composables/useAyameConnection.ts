@@ -58,10 +58,10 @@ const RELAY_CLOSE_REASONS: Record<number, string> = {
 }
 
 /**
- * Ayame の clientId に使う乱数。crypto.randomUUID は http://<IP> で開いた画面（安全でないコンテキスト）では
+ * Ayame の clientId などに使う乱数。crypto.randomUUID は http://<IP> で開いた画面（安全でないコンテキスト）では
  * 使えないので、どこでも使える getRandomValues で作る。
  */
-function randomId(): string {
+export function randomId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16))
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }

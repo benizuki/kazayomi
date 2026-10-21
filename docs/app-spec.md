@@ -263,7 +263,7 @@ Ayame の取り決めどおり HTTP は常に 200 で返し、可否は `allowed
 
 | type | 向き | 中身 |
 |---|---|---|
-| `hello` | Kazami → ブラウザ | `app`（"kazami"）、`version`、`deviceName`、`capabilities`（例: `["capture", "camera"]`） |
+| `hello` | Kazami → ブラウザ | `app`（"kazami"）、`version`、`deviceName`、`capabilities`（例: `["capture", "captureDirect", "camera", "pointer", "chat"]`） |
 | `capture` | ブラウザ → Kazami | `captureId`、`token` |
 | `captureResult` | Kazami → ブラウザ | `captureId`、`ok`、`imageId`（成功時）、`message`（失敗時） |
 | `captureDirect` | ブラウザ → Kazami | `captureId`。ゲストのルームの撮像。画像を kazayomi に送らず、DataChannel でブラウザに渡す |
@@ -272,8 +272,11 @@ Ayame の取り決めどおり HTTP は常に 200 で返し、可否は `allowed
 | `cameraGet` | ブラウザ → Kazami | なし。`cameraState` が返る |
 | `cameraSet` | ブラウザ → Kazami | `zoom`（倍）、`focus`（0: 近い〜1: 遠い、か `"auto"`）、`focusPoint`（`{x, y}`。ブラウザで見ている映像の上の位置を 0〜1 で。その位置にフォーカスと露出を合わせる）、`whiteBalance`（色温度 K、か `"auto"`）、`exposure`（露出補正 EV）。指定したものだけ変える |
 | `cameraState` | Kazami → ブラウザ | `adjustable`、`camera`（例: "広角 1920x1080 30fps"）、`zoom`・`maxZoom`・`zoomPresets`、`focus`・`manualFocus`、`whiteBalance`・`manualWhiteBalance`・`whiteBalanceRange`、`exposure`・`exposureRange`。オートのものは `null`。DataChannel がつながったとき、`cameraSet` のあと、Kazami の画面で調整したとき（0.2 秒落ち着いてから）に送る |
+| `pointer` | ブラウザ → Kazami | `x`・`y`（映像の幅・高さに対する割合 0〜1、左上が原点）、`color`（"#RRGGBB"）。ブラウザで映像をドラッグしている間、30ms ごとに送る。Kazami はプレビューの同じ位置に点を出し、1 秒で消す（配信する映像には入らない） |
+| `chat` | ブラウザ → Kazami | `id`、`text`（200 文字まで）、`from`（送った人の名前。ゲストはニックネーム）。Kazami はプレビューの下のほうに吹き出しで出し、振動と音で知らせる。4 通まで並べ、30 秒で（タップで先に）消す |
+| `chatRead` | Kazami → ブラウザ | `id`。`chat` を画面に出したら返す。ブラウザは送った吹き出しに「既読」を付ける |
 
-知らない `type` は無視する。`capabilities` に `"camera"` が無い Kazami には、カメラの調整を出さない。`"captureDirect"` が無い Kazami には、ゲストのルームの撮像を頼まない（新しい版にするよう出す）。
+知らない `type` は無視する。`capabilities` に `"camera"` が無い Kazami には、カメラの調整を出さない。`"captureDirect"` が無い Kazami には、ゲストのルームの撮像を頼まない（新しい版にするよう出す）。`"pointer"` が無い Kazami には、ポインターのボタンを出さない。`"chat"` が無い Kazami には、メッセージを送れない（入力欄を使えなくする）。
 ブラウザはスライダーを動かしている間、`cameraSet` を 0.12 秒ごとにまとめて送る（送りすぎて詰まらないように）。
 RTT は DataChannel の往復ではなく、WebRTC の統計（選ばれた候補ペアの `currentRoundTripTime`）から出す。
 

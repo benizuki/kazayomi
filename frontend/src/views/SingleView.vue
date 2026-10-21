@@ -2,12 +2,15 @@
   <div class="single">
     <section class="stage">
       <VideoPlayer
+        class="stage__player"
         :stream="conn.stream.value"
         :muted="!speakerOn"
         :placeholder="conn.statusText.value"
         :busy="isBusy"
         :pickable="canFocusRemotely"
+        :pointer-color="pointer.playerColor.value"
         @pick="focusAt"
+        @pointer="pointer.send"
       >
         <div class="stage__badge">
           <span class="chip chip--pill" :class="statusChipClass">{{ statusLabel }}</span>
@@ -18,7 +21,9 @@
           </span>
         </div>
         <transition name="flash"><div v-if="flash" class="stage__flash" /></transition>
+        <ChatSent :messages="chat.visible.value" />
       </VideoPlayer>
+      <ChatInput :chat="chat" />
     </section>
 
     <aside class="side">
@@ -74,6 +79,21 @@
           >
             <v-icon :icon="conn.micOn.value ? 'mdi-microphone' : 'mdi-microphone-off'" />
             <v-tooltip activator="parent" location="bottom">{{ conn.micOn.value ? 'マイクを切る' : 'マイクを入れる' }}</v-tooltip>
+          </v-btn>
+
+          <!-- レーザーポインター。映像の上をドラッグすると、Kazami の画面の同じ位置に出る -->
+          <v-btn
+            icon
+            size="small"
+            :color="pointer.on.value ? 'error' : undefined"
+            :variant="pointer.on.value ? 'flat' : 'outlined'"
+            :disabled="!pointer.available.value"
+            :aria-label="pointer.on.value ? 'ポインターを止める' : 'ポインターを使う'"
+            :aria-pressed="pointer.on.value"
+            @click="pointer.toggle()"
+          >
+            <v-icon icon="mdi-laser-pointer" />
+            <v-tooltip activator="parent" location="bottom">{{ pointer.on.value ? 'ポインターを止める' : 'ポインター（映像をドラッグして Kazami の画面に指し示す）' }}</v-tooltip>
           </v-btn>
 
           <!-- コーデックはめったに変えないので、メニューに入れる -->
@@ -170,10 +190,14 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import CameraControlPanel from '@/components/CameraControlPanel.vue'
 import ImageDetailDialog from '@/components/ImageDetailDialog.vue'
+import ChatInput from '@/components/ChatInput.vue'
+import ChatSent from '@/components/ChatSent.vue'
 import VideoPlayer from '@/components/VideoPlayer.vue'
 import { relaySignalingUrl, useAyameConnection } from '@/composables/useAyameConnection'
 import { getRoom, issueRoomTicket } from '@/composables/useRooms'
 import { useCapture } from '@/composables/useCapture'
+import { useChat } from '@/composables/useChat'
+import { usePointer } from '@/composables/usePointer'
 import { useConfig } from '@/composables/useConfig'
 import { listImages, thumbUrl } from '@/composables/imagesApi'
 import { useStoredRef } from '@/composables/useStoredRef'
@@ -203,6 +227,8 @@ const conn = useAyameConnection({
   codec:        () => codec.value,
   audio:        true,
 })
+const pointer = usePointer(conn)
+const chat = useChat(conn)
 const capturer = useCapture(conn, () => roomId.value, () => config.value?.capture_token_ttl_seconds ?? 60)
 
 const speakerOn = ref(false)
@@ -300,7 +326,8 @@ onMounted(load)
   height: calc(100dvh - var(--app-top));
   padding: var(--sp-4);
 }
-.stage { min-height: 0; }
+.stage { display: flex; flex-direction: column; gap: var(--sp-2); min-height: 0; }
+.stage__player { flex: 1 1 0; min-height: 0; height: auto; }
 .stage__badge {
   position: absolute;
   top: var(--sp-3);
@@ -353,6 +380,6 @@ onMounted(load)
 
 @media (max-width: 900px) {
   .single { grid-template-columns: 1fr; height: auto; }
-  .stage { aspect-ratio: 16 / 9; }
+  .stage__player { flex: none; aspect-ratio: 16 / 9; }
 }
 </style>
