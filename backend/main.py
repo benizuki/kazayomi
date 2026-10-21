@@ -35,7 +35,7 @@ from api.signaling_api import router as signaling_router
 from config.settings import APP_VERSION, get_settings
 from core import audit
 from core.api_common import BACKEND_DIR, FRONTEND_DIST_DIR, _frontend_index, _json_error
-from core.auth import apply_guest_cookie, auth_router, current_principal, init_session
+from core.auth import apply_guest_cookie, asset_version, auth_router, current_principal, init_session
 from core.blobstore import LocalBlobStore, S3BlobStore, init_blobstore
 from core.db import init_db
 from core.dev_auth import assert_safe_environment
@@ -146,6 +146,7 @@ def _legal_page(name: str) -> HTMLResponse:
         .replace("__CONTACT__", html.escape(settings.operator_contact))
         .replace("__VERSION__", html.escape(guest_rooms.TERMS_VERSION))
         .replace("__AUDIT_DAYS__", str(settings.audit_log_retention_days))
+        .replace("__LEGAL_CSS_VERSION__", asset_version("legal.css"))
     )
     return HTMLResponse(page)
 
@@ -238,7 +239,12 @@ def spa_fallback(path: str, request: Request):
     # ビルド成果物（JS・CSS・アイコン）はログイン画面より前にも要るので、そのまま返す
     asset_path = (FRONTEND_DIST_DIR / path).resolve()
     if path and asset_path.is_file() and asset_path.is_relative_to(FRONTEND_DIST_DIR):
-        return FileResponse(asset_path)
+        # assets/ の下は Vite が中身の版を名前に入れているので、長くキャッシュしてよい。
+        # ほか（public/ から来る theme-init.js や画像）は名前が変わらないので、毎回確かめさせる
+        # （Cloudflare などが古いものを持ち続けないように）
+        immutable = path.startswith("assets/")
+        cache = "public, max-age=31536000, immutable" if immutable else "no-cache"
+        return FileResponse(asset_path, headers={"Cache-Control": cache})
     if current_principal(request) is None:
         target = "/" + path + (f"?{request.url.query}" if request.url.query else "")
         return RedirectResponse(url=f"/login?next={quote(target)}", status_code=302)

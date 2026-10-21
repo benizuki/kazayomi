@@ -180,3 +180,16 @@ def test_audit_logs_older_than_retention_are_purged(isolated_storage):
     # 書き足しても、消えた記録は戻らない
     audit.record_operation(actor_email="a@example.com", event="x", target="y")
     assert len(path.read_text(encoding="utf-8").splitlines()) == 2
+
+
+def test_login_assets_are_not_cached_and_versioned(client: TestClient):
+    """Cloudflare などに古いスクリプトを持たれないように、毎回確かめさせ、URL に版を付ける。"""
+    import re
+
+    page = client.get("/login").text
+    version = re.search(r'/auth/login\.js\?v=([0-9a-f]{12})', page)
+    assert version, "login.js の URL に版が付いていない"
+    res = client.get(f"/auth/login.js?v={version.group(1)}")
+    assert res.status_code == 200 and res.headers["cache-control"] == "no-cache"
+    assert client.get("/auth/legal.css").headers["cache-control"] == "no-cache"
+    assert re.search(r'/auth/legal\.css\?v=[0-9a-f]{12}', client.get("/terms").text)

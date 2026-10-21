@@ -8,7 +8,9 @@ RUN npm run build
 # 成果物: /app/frontend/dist
 
 # ── Python 依存関係 ───────────────────────────────────
-FROM python:3.12-slim AS backend-builder
+# ランタイムと同じイメージにする。Python のバージョンがずれると、/opt/venv に入れた依存関係が
+# 見つからずに起動できない（No module named 'gunicorn' など）
+FROM python:3.14-slim-trixie AS backend-builder
 COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /usr/local/bin/uv
 WORKDIR /app/backend
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy

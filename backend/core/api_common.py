@@ -65,4 +65,5 @@ def _frontend_index() -> FileResponse:
             status_code=404,
             detail="frontend のビルド成果物が見つかりません。frontend で npm run build を実行してください。",
         )
-    return FileResponse(index_file)
+    # 画面の入口。新しい版の assets/ を読ませるため、キャッシュさせない
+    return FileResponse(index_file, headers={"Cache-Control": "no-cache"})

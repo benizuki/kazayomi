@@ -297,19 +297,30 @@ async def login(request: Request):
         .replace("__GOOGLE_OAUTH_CONFIG_ERROR__", html.escape(config_error))
         .replace("__LOGIN_REDIRECT__", html.escape(redirect_target))
         .replace("__GUEST_ENABLED__", "true" if app_settings.guest_enabled() else "false")
+        .replace("__LOGIN_JS_VERSION__", asset_version("login.js"))
         .replace("__TERMS_VERSION__", html.escape(guest_rooms.TERMS_VERSION))
     )
     return HTMLResponse(page)
 
 
+# ログイン画面のスクリプトとスタイル。Cloudflare などが拡張子を見て長くキャッシュすると、更新したあとも
+# 古いものが返り、画面が動かなくなる（ゲストの欄が出ないなど）。毎回確かめさせ、URL にも中身の版を付ける
+_NO_STORE_CACHE = {"Cache-Control": "no-cache"}
+
+
+def asset_version(name: str) -> str:
+    """ファイルの中身から作る版（中身が変われば URL も変わる）。"""
+    return hashlib.sha256((TEMPLATES_DIR / name).read_bytes()).hexdigest()[:12]
+
+
 @auth_router.get("/auth/login.js")
 def login_script():
-    return FileResponse(TEMPLATES_DIR / "login.js", media_type="text/javascript")
+    return FileResponse(TEMPLATES_DIR / "login.js", media_type="text/javascript", headers=_NO_STORE_CACHE)
 
 
 @auth_router.get("/auth/legal.css")
 def legal_stylesheet():
-    return FileResponse(TEMPLATES_DIR / "legal.css", media_type="text/css")
+    return FileResponse(TEMPLATES_DIR / "legal.css", media_type="text/css", headers=_NO_STORE_CACHE)
 
 
 def _verify_google_credential(credential: str) -> dict[str, Any]:
