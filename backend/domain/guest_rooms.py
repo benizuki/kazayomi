@@ -288,6 +288,8 @@ def issue_token(payload: dict[str, Any], *, ttl_seconds: int) -> dict[str, Any]:
         "room": {"id": room["id"], "name": "一時的なルーム", "ayame_room_id": room["ayame_room_id"]},
         "signaling_url": rooms.default_signaling_url(),
         "signaling_key": access_token,
+        # ゲストのルームの画像は預からない。Kazami は本体の撮像ボタンを出さない（撮像はブラウザから）
+        "can_upload_captures": False,
     }
 
 

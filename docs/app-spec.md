@@ -209,7 +209,7 @@ Ayame の呼び方にそろえて「ルーム」と呼ぶ（以前は「チャ�
 2. Kazami は端末の中で P-256 の署名鍵を作る（実機は Secure Enclave）。`POST /api/devices/enroll` に `token`・`device_id`・`device_pub`（x963 の Base64）・`signature` を送る
    - 署名する中身: `kazayomi-enroll-v1` `\n` token `\n` device_id `\n` 公開鍵
 3. 起動のたびに `POST /api/devices/challenge` → `POST /api/devices/token`（署名する中身: `kazayomi-auth-v1` `\n` challenge `\n` device_id）
-   - 返すもの: `access_token`（12 時間）、`room`（name・ayame_room_id）、`signaling_url`、`signaling_key`（= access_token）
+   - 返すもの: `access_token`（12 時間）、`room`（name・ayame_room_id）、`signaling_url`、`signaling_key`（= access_token）、`can_upload_captures`（本体の撮像ボタンで撮った画像を送れるか。ゲストのルームは false で、Kazami は撮像ボタンを出さない。無ければ true とみなす）
 4. Kazami は受け取った設定でつなぐ。撮像した画像は登録した kazayomi へ送る。つなぐ先を Kazami で手入力する欄は持たない。登録していない Kazami はつながない
 5. 端末をなくした・入れ替えるときは、マスター › デバイスで「登録を外す」。次の接続から入れなくなる
 

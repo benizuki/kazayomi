@@ -149,6 +149,7 @@ def test_kazami_enrolls_into_guest_room_and_ayame_checks_it(client: TestClient):
     config = kazami_call(client, kazami)
     assert config["room"]["ayame_room_id"] == room["ayame_room_id"]
     assert config["signaling_url"] == "wss://ayame.example.com/signaling"
+    assert config["can_upload_captures"] is False  # Kazami は本体の撮像ボタンを出さない
 
     # Ayame の認証 Webhook: 登録した Kazami と、持ち主のブラウザ（チケット）だけを通す
     device_key = config["signaling_key"]

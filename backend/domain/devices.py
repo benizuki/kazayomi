@@ -288,6 +288,8 @@ def issue_token(payload: dict[str, Any], *, ttl_seconds: int, default_signaling_
         "signaling_url": room["signaling_url"] if room else default_signaling_url,
         # Ayame に register するときの signalingKey。認証 Webhook がこれで端末を確かめる
         "signaling_key": access_token,
+        # 本体の撮像ボタンで撮った画像を /api/devices/images に送れるか（ゲストのルームは False）
+        "can_upload_captures": True,
     }
 
 

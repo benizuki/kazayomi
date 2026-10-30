@@ -55,6 +55,7 @@ def test_enroll_then_login_returns_room_config():
     assert config["room"] == {"id": room["id"], "name": "ライン1", "ayame_room_id": "line-1"}
     assert config["signaling_url"] == room["signaling_url"]
     assert config["signaling_key"] == config["access_token"]
+    assert config["can_upload_captures"] is True
     assert devices.resolve_access_token(config["access_token"])["id"] == device["id"]
 
 
