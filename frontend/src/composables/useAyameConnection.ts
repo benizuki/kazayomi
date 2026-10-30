@@ -58,9 +58,28 @@ export function routeLabel(route: ConnectionRoute): string {
   return `TURN 中継（${side}${detail ? `・${detail}` : ''}）`
 }
 
-function classifyRoute(local: string, remote: string): ConnectionRoute['kind'] {
-  if (local === 'relay' || remote === 'relay') return 'turn'
-  if (['srflx', 'prflx'].includes(local) || ['srflx', 'prflx'].includes(remote)) return 'stun'
+/** LAN の中のアドレスか（プライベート・リンクローカル・mDNS の .local） */
+function isLocalAddress(address: string): boolean {
+  const a = address.toLowerCase()
+  return a.endsWith('.local')
+    || /^(10\.|192\.168\.|169\.254\.|127\.)/.test(a)
+    || /^172\.(1[6-9]|2\d|3[01])\./.test(a)
+    || /^(fc|fd|fe80:|::1$)/.test(a)
+}
+
+/**
+ * prflx（接続確認の途中で見つかった候補）は、STUN を通らなくても出る。
+ * 同じ LAN でも、相手がアドレスを mDNS で隠していると prflx になるので、
+ * アドレスが LAN の中なら直接とみなす
+ */
+function viaStun(type: string, address: string): boolean {
+  return type === 'srflx' || (type === 'prflx' && !isLocalAddress(address))
+}
+
+function classifyRoute(local: any, remote: any): ConnectionRoute['kind'] {
+  if (local.candidateType === 'relay' || remote.candidateType === 'relay') return 'turn'
+  const addressOf = (c: any): string => c.address ?? c.ip ?? ''
+  if (viaStun(local.candidateType, addressOf(local)) || viaStun(remote.candidateType, addressOf(remote))) return 'stun'
   return 'direct'
 }
 
@@ -435,7 +454,7 @@ export function useAyameConnection(options: AyameOptions) {
     const local = report.get(pair.localCandidateId) ?? {}
     const remote = report.get(pair.remoteCandidateId) ?? {}
     return {
-      kind: classifyRoute(local.candidateType ?? '', remote.candidateType ?? ''),
+      kind: classifyRoute(local, remote),
       local: local.candidateType ?? '',
       remote: remote.candidateType ?? '',
       protocol: local.protocol ?? '',
