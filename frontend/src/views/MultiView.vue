@@ -58,7 +58,8 @@ const { rooms, loading, error, fetchRooms } = useRooms()
 const { config, load: loadConfig } = useConfig()
 
 const selectedIds = useStoredRef<string[]>('kazayomi.multiRooms', [])
-const tileSize = useStoredRef<'s' | 'm' | 'l'>('kazayomi.multiTileSize', 'm')
+// 既定は小（以前の「中」と同じ 420px）
+const tileSize = useStoredRef<'s' | 'm' | 'l'>('kazayomi.multiTileSize', 's')
 const codec = useStoredRef('kazayomi.codec', '')
 const maximizedId = ref<string | null>(null)
 
@@ -72,7 +73,7 @@ const codecItems = [
 
 const roomItems = computed(() => rooms.value.map((c) => ({ title: c.name, value: c.id })))
 const tiles = computed(() => rooms.value.filter((c) => selectedIds.value.includes(c.id)))
-const tileMin = computed(() => ({ s: '280px', m: '420px', l: '640px' }[tileSize.value]))
+const tileMin = computed(() => ({ s: '420px', m: '640px', l: '960px' }[tileSize.value]))
 
 watch(tiles, (list) => {
   if (maximizedId.value && !list.some((c) => c.id === maximizedId.value)) maximizedId.value = null
@@ -103,7 +104,8 @@ onMounted(async () => {
 .toolbar__codec { max-width: 140px; }
 .tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(var(--tile-min), 1fr));
+  /* 画面がタイルより狭いときは、はみ出さずに画面の幅に合わせる */
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--tile-min), 100%), 1fr));
   gap: var(--sp-3);
   align-content: start;
   flex: 1;
