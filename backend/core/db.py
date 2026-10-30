@@ -236,6 +236,12 @@ _MIGRATIONS: list[str] = [
         updated_at TEXT NOT NULL
     );
     """,
+    # v12: サーバの種類。cloudflare は、シグナリングは Ayame のまま、TURN の認証情報を Cloudflare から発行して渡す
+    """
+    ALTER TABLE servers ADD COLUMN kind TEXT NOT NULL DEFAULT 'ayame';
+    ALTER TABLE servers ADD COLUMN turn_key_id TEXT NOT NULL DEFAULT '';
+    ALTER TABLE servers ADD COLUMN turn_api_token TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 _lock = threading.Lock()

@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from core.auth import require_principal
-from domain import devices, room_access
+from domain import devices, room_access, servers, turn
 from domain.common import NotFoundError
 from main import app
 from tests.conftest import make_room, make_group, principal
@@ -101,3 +101,86 @@ def test_from_ayame_checks_source_ip_and_proxy_headers():
     # 同じホストのリバースプロキシを通った外からのリクエストは、127.0.0.1 に見えても断る
     assert _from_ayame(_Req("127.0.0.1", {"x-forwarded-for": "203.0.113.5"})) is False
     assert _from_ayame(_Req("127.0.0.1", {"forwarded": "for=203.0.113.5"})) is False
+
+
+# ── Cloudflare TURN ─────────────────────────────
+
+class _FakeResponse:
+    def __init__(self, body: dict):
+        self._body = body
+
+    def raise_for_status(self) -> None:
+        pass
+
+    def json(self) -> dict:
+        return self._body
+
+
+def _cloudflare_server(**extra) -> dict:
+    return servers.create_server({
+        "name": "CF", "signaling_url": "wss://ayame.example.com/signaling", "kind": "cloudflare",
+        "turn_key_id": "key-1", "turn_api_token": "secret-token", "is_default": True, **extra,
+    })
+
+
+def test_cloudflare_server_returns_turn_ice_servers_without_port_53(monkeypatch):
+    calls = []
+
+    def fake_post(url, headers, json, timeout):
+        calls.append((url, headers["Authorization"], json["ttl"]))
+        return _FakeResponse({"iceServers": [
+            {"urls": ["stun:stun.cloudflare.com:3478", "stun:stun.cloudflare.com:53"]},
+            {"urls": ["turn:turn.cloudflare.com:3478?transport=udp", "turn:turn.cloudflare.com:53?transport=udp",
+                      "turns:turn.cloudflare.com:443?transport=tcp"],
+             "username": "u", "credential": "c"},
+        ]})
+
+    monkeypatch.setattr(turn.requests, "post", fake_post)
+    _cloudflare_server()
+    room = make_room("A", "room-a")
+    for _ in range(2):
+        ticket = room_access.issue_room_ticket(room["id"], principal())["ticket"]
+        result = _register("room-a", ticket)
+        assert result["allowed"] is True
+        assert result["iceServers"] == [
+            {"urls": ["stun:stun.cloudflare.com:3478"]},
+            {"urls": ["turn:turn.cloudflare.com:3478?transport=udp", "turns:turn.cloudflare.com:443?transport=tcp"],
+             "username": "u", "credential": "c"},
+        ]
+    # 2 回目は覚えておいた認証情報を使う
+    assert calls == [(turn.API_URL.format(key_id="key-1"), "Bearer secret-token", turn.CREDENTIAL_TTL_SECONDS)]
+
+
+def test_cloudflare_failure_falls_back_to_stun(monkeypatch):
+    def fake_post(*args, **kwargs):
+        raise turn.requests.ConnectionError("down")
+
+    monkeypatch.setattr(turn.requests, "post", fake_post)
+    _cloudflare_server()
+    room = make_room("A", "room-a")
+    ticket = room_access.issue_room_ticket(room["id"], principal())["ticket"]
+    result = _register("room-a", ticket)
+    assert result["allowed"] is True
+    assert result["iceServers"] == turn.FALLBACK_ICE_SERVERS
+
+
+def test_ayame_server_and_denied_register_have_no_ice_servers(monkeypatch):
+    monkeypatch.setattr(turn.requests, "post", lambda *a, **k: pytest.fail("should not call cloudflare"))
+    servers.create_server({"name": "A", "signaling_url": "wss://ayame.example.com/signaling", "is_default": True})
+    room = make_room("A", "room-a")
+    ticket = room_access.issue_room_ticket(room["id"], principal())["ticket"]
+    assert "iceServers" not in _register("room-a", ticket)
+    assert "iceServers" not in _register("room-a", "v1.unknown")
+
+
+def test_cloudflare_server_hides_token_and_keeps_it_when_blank():
+    server = _cloudflare_server()
+    assert "turn_api_token" not in server and server["turn_api_token_set"] is True
+    server = servers.update_server(server["id"], {**server, "turn_api_token": ""})
+    assert servers.ice_server_config("anything")["api_token"] == "secret-token"
+    with pytest.raises(ValueError):
+        servers.create_server({"name": "x", "signaling_url": "ws://x/signaling", "kind": "cloudflare", "turn_key_id": "k"})
+    # ayame に戻すと TURN の設定は消える
+    servers.update_server(server["id"], {**server, "kind": "ayame"})
+    assert servers.ice_server_config("anything") is None
+    assert servers.get_server(server["id"])["turn_api_token_set"] is False

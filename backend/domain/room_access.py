@@ -6,6 +6,7 @@ Ayame は register を受けるたびに kazayomi の Webhook を呼ぶ。ルー
   チケットは、そのルームを見られるログイン中のユーザーにだけ、接続の直前に発行する（1 分・1 回限り）
 
 これで、ルームIDを知っているだけでは映像を見られない。
+入室を許すときは、ルームのサーバが cloudflare なら TURN の iceServers も返す（Ayame が accept で両方に渡す）。
 """
 from __future__ import annotations
 
@@ -15,7 +16,7 @@ import secrets
 from typing import Any
 
 from core.kv import get_store
-from domain import devices, guest_rooms, rooms
+from domain import devices, guest_rooms, rooms, servers, turn
 from domain.access import Principal
 
 ROOM_TICKET_TTL_SECONDS = 60
@@ -44,6 +45,15 @@ def issue_guest_ticket(viewer: Principal) -> dict[str, Any]:
 
 def authenticate(payload: dict[str, Any]) -> dict[str, Any]:
     """Ayame への応答。HTTP は常に 200 で返し、可否は allowed で伝える（Ayame の取り決め）。"""
+    result = _decide(payload)
+    if result["allowed"]:
+        config = servers.ice_server_config(str(payload.get("roomId")))
+        if config is not None:
+            result["iceServers"] = turn.ice_servers(config)
+    return result
+
+
+def _decide(payload: dict[str, Any]) -> dict[str, Any]:
     ayame_room_id = str(payload.get("roomId") or "")
     key = str(payload.get("signalingKey") or "")
     if not ayame_room_id or not key:

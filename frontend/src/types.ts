@@ -120,10 +120,18 @@ export interface AppSettings {
   guest_enabled: boolean
 }
 
+/** ayame: Ayame だけ（既定の STUN）。cloudflare: シグナリングは Ayame、TURN は Cloudflare で発行する */
+export type ServerKind = 'ayame' | 'cloudflare'
+
 export interface Server {
   id:            string
   name:          string
   signaling_url: string
+  kind:          ServerKind
+  /** Cloudflare の TURN キー ID（kind が cloudflare のとき） */
+  turn_key_id:   string
+  /** API トークンを設定済みか。トークンそのものは返らない */
+  turn_api_token_set: boolean
   note:          string
   /** 既定のサーバ。サーバを選んでいないルームが使う（1 つだけ） */
   is_default:    boolean
@@ -132,7 +140,10 @@ export interface Server {
   updated_at:    string
 }
 
-export type ServerInput = Pick<Server, 'name' | 'signaling_url' | 'note' | 'is_default'>
+export type ServerInput = Pick<Server, 'name' | 'signaling_url' | 'kind' | 'turn_key_id' | 'note' | 'is_default'> & {
+  /** 空のまま保存すると、今のトークンをそのまま使う */
+  turn_api_token: string
+}
 
 // ルーム（Ayame のルーム）。Kazami 1 台ぶんの映像の入口
 export interface Room {

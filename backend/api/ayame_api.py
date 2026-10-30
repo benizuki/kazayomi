@@ -6,6 +6,7 @@ import ipaddress
 import logging
 
 from fastapi import APIRouter, HTTPException, Request
+from starlette.concurrency import run_in_threadpool
 
 from config.settings import get_settings
 from core.api_common import _request_json
@@ -66,7 +67,8 @@ async def api_ayame_authn(request: Request, key: str = ""):
         logger.warning("ayame authn webhook called with a wrong key")
         return {"allowed": False, "reason": "webhook key mismatch"}
     payload = await _request_json(request)
-    result = room_access.authenticate(payload)
+    # cloudflare のサーバでは TURN の認証情報を発行しに外へ出るので、イベントループを止めないよう別スレッドで
+    result = await run_in_threadpool(room_access.authenticate, payload)
     if not result["allowed"]:
         logger.info("ayame authn denied: room=%s reason=%s", payload.get("roomId"), result.get("reason"))
     return result

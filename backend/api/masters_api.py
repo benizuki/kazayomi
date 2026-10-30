@@ -116,6 +116,12 @@ async def api_update_settings(request: Request, viewer: Viewer):
 
 # ── サーバ ────────────────────────────────────────
 
+def _server_detail(server: dict) -> str:
+    # API トークンは記録に残さない
+    kind = f" kind={server['kind']}" + (f" key={server['turn_key_id']}" if server["kind"] == "cloudflare" else "")
+    return f"{server['signaling_url']}{kind}{' （既定）' if server['is_default'] else ''}"
+
+
 @router.get("/servers")
 def api_list_servers(viewer: Viewer):
     # グループ管理者も、ルームのサーバを選ぶために一覧は見られる（編集はアプリ全体の権限が要る）
@@ -127,7 +133,7 @@ def api_list_servers(viewer: Viewer):
 async def api_create_server(request: Request, viewer: Viewer):
     viewer.require_global("can_manage_devices")
     server = servers.create_server(await _request_json(request))
-    _audit(viewer, "server.create", server["name"], f"{server['signaling_url']}{' （既定）' if server['is_default'] else ''}")
+    _audit(viewer, "server.create", server["name"], _server_detail(server))
     return JSONResponse(status_code=201, content=server)
 
 
@@ -135,7 +141,7 @@ async def api_create_server(request: Request, viewer: Viewer):
 async def api_update_server(server_id: str, request: Request, viewer: Viewer):
     viewer.require_global("can_manage_devices")
     server = servers.update_server(server_id, await _request_json(request))
-    _audit(viewer, "server.update", server["name"], f"{server['signaling_url']}{' （既定）' if server['is_default'] else ''}")
+    _audit(viewer, "server.update", server["name"], _server_detail(server))
     return server
 
 

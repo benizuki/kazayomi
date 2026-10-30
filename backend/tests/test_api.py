@@ -193,3 +193,19 @@ def test_login_assets_are_not_cached_and_versioned(client: TestClient):
     assert res.status_code == 200 and res.headers["cache-control"] == "no-cache"
     assert client.get("/auth/legal.css").headers["cache-control"] == "no-cache"
     assert re.search(r'/auth/legal\.css\?v=[0-9a-f]{12}', client.get("/terms").text)
+
+
+def test_server_api_never_returns_or_logs_turn_token(client: TestClient, isolated_storage):
+    login_as(principal("admin"))
+    res = client.post("/api/masters/servers", json={
+        "name": "CF", "signaling_url": "wss://ayame.example.com/signaling", "kind": "cloudflare",
+        "turn_key_id": "key-1", "turn_api_token": "secret-token",
+    })
+    assert res.status_code == 201
+    server = res.json()
+    assert server["kind"] == "cloudflare" and server["turn_api_token_set"] is True
+    res = client.put(f"/api/masters/servers/{server['id']}", json={**server, "turn_api_token": ""})
+    assert res.status_code == 200 and res.json()["turn_api_token_set"] is True
+    listed = client.get("/api/masters/servers").text
+    assert "secret-token" not in listed
+    assert "secret-token" not in (isolated_storage / "audit_logs.jsonl").read_text()

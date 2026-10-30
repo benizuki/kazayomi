@@ -71,6 +71,9 @@ rustfs のバケットは全グループで 1 つなので、rustfs の機能で
 |---|---|---|---|---|---|---|
 | サーバ名 | name | text | ✓ | ✓ | ✓ | 一意 |
 | シグナリングURL | signaling_url | text | ✓ | ✓ |  | ws:// か wss://。kazayomi と Kazami の両方から届く URL（ブラウザは kazayomi 経由） |
+| 種類 | kind | enum(ayame,cloudflare) | ✓ | ✓ |  | 既定=ayame。cloudflare はシグナリングは Ayame のまま、TURN の認証情報を Cloudflare で発行して渡す |
+| TURN キー ID | turn_key_id | text |  | ✓ |  | kind=cloudflare のとき必須。Cloudflare の Realtime → TURN のキー |
+| API トークン | turn_api_token | text |  |  |  | kind=cloudflare のとき必須。API では返さない（`turn_api_token_set` だけ）。空で保存すると今の値のまま。監査ログにも残さない |
 | メモ | note | longtext |  |  |  | |
 | 既定 | is_default | bool |  | ✓ |  | 既定のサーバ。1 つだけ。サーバを選んでいないルームと、ルームを割り当てていない端末が使う |
 
@@ -229,6 +232,13 @@ Ayame の `authn_webhook_url` を `http://127.0.0.1:8080/api/ayame/authn` に向
 - `AYAME_WEBHOOK_SECRET` を設定したときは、`?key=` の一致も求める（任意）
 - これで kazayomi をインターネットに公開しても、Webhook は外から呼べない
 Ayame の取り決めどおり HTTP は常に 200 で返し、可否は `allowed` で伝える。
+
+入室を許すとき、ルームのサーバ（なければ既定のサーバ。ゲストの一時的なルームも既定のサーバ）が `cloudflare` なら、応答に `iceServers` を付ける。Ayame はそれを `accept` に載せてブラウザと Kazami に渡す。
+
+- Cloudflare の `generate-ice-servers` で TTL 24 時間の認証情報を発行し、サーバごとに 1 時間だけ使い回す（サーバを編集したら発行し直す）
+- ポート 53 の URL はブラウザで使えないので除く
+- 発行に失敗したら（3 秒で打ち切る）`stun:stun.cloudflare.com:3478` だけを渡す
+- `ayame` のサーバでは `iceServers` を付けない（ブラウザも Kazami も既定の STUN を使う）
 
 | signalingKey | 通すとき |
 |---|---|

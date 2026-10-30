@@ -16,6 +16,9 @@
         {{ item.name }}
         <span v-if="item.is_default" class="chip chip--sm chip--brand default-chip">既定</span>
       </template>
+      <template #item.kind="{ item }">
+        <span class="chip chip--sm">{{ kindLabel(item.kind) }}</span>
+      </template>
       <template #item.signaling_url="{ item }"><code>{{ item.signaling_url }}</code></template>
       <template #item.room_count="{ item }"><span class="numeric">{{ item.room_count }}</span></template>
       <template #item.actions="{ item }">
@@ -39,6 +42,13 @@
         <v-card-text class="form">
           <v-alert v-if="formError" type="error">{{ formError }}</v-alert>
           <v-text-field v-model="form.name" label="サーバ名" autofocus />
+          <v-select
+            v-model="form.kind"
+            :items="kindItems"
+            label="種類"
+            hint="Cloudflare TURN にすると、入室のたびに TURN の認証情報を発行して、ブラウザと Kazami に渡します"
+            persistent-hint
+          />
           <v-text-field
             v-model="form.signaling_url"
             label="シグナリングURL"
@@ -46,6 +56,19 @@
             hint="kazayomi と Kazami の両方から届く URL にします（ブラウザは kazayomi を経由します）。localhost は不可"
             persistent-hint
           />
+          <template v-if="form.kind === 'cloudflare'">
+            <v-text-field v-model="form.turn_key_id" label="TURN キー ID" hint="Cloudflare ダッシュボードの Realtime → TURN で作ったキー" persistent-hint />
+            <v-text-field
+              v-model="form.turn_api_token"
+              label="API トークン"
+              type="password"
+              autocomplete="new-password"
+              :placeholder="editing?.turn_api_token_set ? '設定済み（変えるときだけ入力）' : ''"
+              persistent-placeholder
+              hint="TURN キーと一緒に表示される API トークン。保存後は表示しません"
+              persistent-hint
+            />
+          </template>
           <v-textarea v-model="form.note" label="メモ（任意）" rows="2" auto-grow />
           <v-checkbox
             v-model="form.is_default"
@@ -57,7 +80,7 @@
         <v-card-actions>
           <v-spacer />
           <v-btn variant="text" @click="editOpen = false">キャンセル</v-btn>
-          <v-btn color="primary" :loading="saving" :disabled="!form.name || !form.signaling_url" @click="save">保存</v-btn>
+          <v-btn color="primary" :loading="saving" :disabled="!canSave" @click="save">保存</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -72,14 +95,24 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import MasterToolbar from '@/components/masters/MasterToolbar.vue'
 import { useServersMaster } from '@/composables/useMasters'
-import type { Server, ServerInput } from '@/types'
+import type { Server, ServerInput, ServerKind } from '@/types'
+
+const kindItems: { title: string; value: ServerKind }[] = [
+  { title: 'Ayame', value: 'ayame' },
+  { title: 'Ayame + Cloudflare TURN', value: 'cloudflare' },
+]
+
+function kindLabel(kind: ServerKind): string {
+  return kind === 'cloudflare' ? 'Cloudflare TURN' : 'Ayame'
+}
 
 const headers = [
   { title: 'サーバ名', key: 'name' },
+  { title: '種類', key: 'kind' },
   { title: 'シグナリングURL', key: 'signaling_url' },
   { title: 'ルーム', key: 'room_count', align: 'end' as const },
   { title: 'メモ', key: 'note' },
@@ -92,9 +125,17 @@ const error = ref<string | null>(null)
 
 const editOpen = ref(false)
 const editing = ref<Server | null>(null)
-const form = reactive<ServerInput>({ name: '', signaling_url: '', note: '', is_default: false })
+const form = reactive<ServerInput>({
+  name: '', signaling_url: '', kind: 'ayame', turn_key_id: '', turn_api_token: '', note: '', is_default: false,
+})
 const formError = ref<string | null>(null)
 const saving = ref(false)
+
+const canSave = computed(() => {
+  if (!form.name || !form.signaling_url) return false
+  if (form.kind !== 'cloudflare') return true
+  return !!form.turn_key_id && (!!form.turn_api_token || !!editing.value?.turn_api_token_set)
+})
 
 function openEdit(server: Server | null): void {
   editing.value = server
@@ -102,6 +143,9 @@ function openEdit(server: Server | null): void {
   Object.assign(form, {
     name: server?.name ?? '',
     signaling_url: server?.signaling_url ?? '',
+    kind: server?.kind ?? 'ayame',
+    turn_key_id: server?.turn_key_id ?? '',
+    turn_api_token: '',
     note: server?.note ?? '',
     // 最初の 1 台は既定にしておく（サーバを選ばないルームがそのまま使える）
     is_default: server ? server.is_default : servers.items.value.length === 0,
@@ -124,7 +168,10 @@ async function save(): Promise<void> {
 
 async function makeDefault(server: Server): Promise<void> {
   try {
-    await servers.save({ name: server.name, signaling_url: server.signaling_url, note: server.note, is_default: true }, server.id)
+    await servers.save({
+      name: server.name, signaling_url: server.signaling_url, kind: server.kind, turn_key_id: server.turn_key_id,
+      turn_api_token: '', note: server.note, is_default: true,
+    }, server.id)
   } catch (e) {
     error.value = (e as Error).message
   }
