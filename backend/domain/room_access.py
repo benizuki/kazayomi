@@ -47,9 +47,10 @@ def authenticate(payload: dict[str, Any]) -> dict[str, Any]:
     """Ayame への応答。HTTP は常に 200 で返し、可否は allowed で伝える（Ayame の取り決め）。"""
     result = _decide(payload)
     if result["allowed"]:
-        config = servers.ice_server_config(str(payload.get("roomId")))
+        room = str(payload.get("roomId"))
+        config = servers.ice_server_config(room)
         if config is not None:
-            result["iceServers"] = turn.ice_servers(config)
+            result["iceServers"] = turn.ice_servers(config, room)
     return result
 
 

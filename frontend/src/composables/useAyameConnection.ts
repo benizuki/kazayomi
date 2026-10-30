@@ -29,6 +29,39 @@ export interface ConnectionStats {
   fps:       number
   rttMs:     number | null
   audio:     string
+  /** いま使っている ICE の経路。まだ決まっていなければ null */
+  route:     ConnectionRoute | null
+}
+
+/** host: 直接 / srflx・prflx: STUN で穴を開けて直接 / relay: TURN で中継 */
+export type CandidateType = 'host' | 'srflx' | 'prflx' | 'relay'
+
+export interface ConnectionRoute {
+  /** 経路の分類。どちらかが relay なら turn、どちらかが srflx/prflx なら stun、それ以外は direct */
+  kind:        'direct' | 'stun' | 'turn'
+  local:       CandidateType | ''
+  remote:      CandidateType | ''
+  /** 通信のプロトコル（udp / tcp） */
+  protocol:    string
+  /** TURN サーバまでのプロトコル（udp / tcp / tls）。relay のときだけ */
+  relayProtocol: string
+  /** 自分側の候補を作った STUN/TURN サーバの URL。ブラウザによっては取れない（Safari など） */
+  serverUrl:   string
+}
+
+export function routeLabel(route: ConnectionRoute): string {
+  if (route.kind === 'direct') return '直接'
+  if (route.kind === 'stun') return 'P2P（STUN）'
+  const side = route.local === 'relay' ? (route.remote === 'relay' ? '両側' : 'こちら側') : '相手側'
+  const host = route.serverUrl ? route.serverUrl.replace(/^turns?:/, '').replace(/[:?].*$/, '') : ''
+  const detail = [route.relayProtocol, host].filter(Boolean).join('・')
+  return `TURN 中継（${side}${detail ? `・${detail}` : ''}）`
+}
+
+function classifyRoute(local: string, remote: string): ConnectionRoute['kind'] {
+  if (local === 'relay' || remote === 'relay') return 'turn'
+  if (['srflx', 'prflx'].includes(local) || ['srflx', 'prflx'].includes(remote)) return 'stun'
+  return 'direct'
 }
 
 export interface AyameOptions {
@@ -96,6 +129,7 @@ export function useAyameConnection(options: AyameOptions) {
   let reconnectTimer: number | undefined
   let statsTimer: number | undefined
   let pendingCandidates: RTCIceCandidateInit[] = []
+  let lastRouteKey = ''
   const controlHandlers = new Set<(message: ControlMessage) => void>()
 
   const statusText = computed(() => {
@@ -299,8 +333,12 @@ export function useAyameConnection(options: AyameOptions) {
 
   function createPeer(iceServers?: RTCIceServer[]): void {
     closePeer()
-    const peer = new RTCPeerConnection({ iceServers: iceServers?.length ? iceServers : DEFAULT_ICE_SERVERS })
+    const servers = iceServers?.length ? iceServers : DEFAULT_ICE_SERVERS
+    // 認証情報（username / credential）は出さない
+    console.info('[ayame] ice servers', servers.flatMap((s) => (Array.isArray(s.urls) ? s.urls : [s.urls])))
+    const peer = new RTCPeerConnection({ iceServers: servers })
     pc = peer
+    lastRouteKey = ''
     peer.onicecandidate = (event) => {
       if (event.candidate) send({ type: 'candidate', ice: event.candidate.toJSON() })
     }
@@ -361,7 +399,7 @@ export function useAyameConnection(options: AyameOptions) {
     const report = await peer.getStats()
     const codecs = new Map<string, string>()
     report.forEach((s) => { if (s.type === 'codec') codecs.set(s.id, String(s.mimeType).replace(/^(video|audio)\//, '')) })
-    const next: ConnectionStats = { codec: '', width: 0, height: 0, fps: 0, rttMs: null, audio: '' }
+    const next: ConnectionStats = { codec: '', width: 0, height: 0, fps: 0, rttMs: null, audio: '', route: readRoute(report) }
     report.forEach((s) => {
       if (s.type === 'inbound-rtp' && s.kind === 'video') {
         next.codec = codecs.get(s.codecId) ?? ''
@@ -374,7 +412,36 @@ export function useAyameConnection(options: AyameOptions) {
         next.rttMs = Math.round(s.currentRoundTripTime * 1000)
       }
     })
-    if (peer === pc) stats.value = next
+    if (peer !== pc) return
+    stats.value = next
+    const route = next.route
+    const key = route ? `${route.local}/${route.remote}/${route.protocol}/${route.relayProtocol}/${route.serverUrl}` : ''
+    if (route && key !== lastRouteKey) {
+      console.info(`[ayame] route: ${routeLabel(route)}`, route)
+    }
+    lastRouteKey = key
+  }
+
+  /** 選ばれている candidate-pair から経路を読む。transport の selectedCandidatePairId が無いブラウザでは nominated を見る */
+  function readRoute(report: RTCStatsReport): ConnectionRoute | null {
+    let pair: any = null
+    report.forEach((s) => {
+      if (s.type === 'transport' && s.selectedCandidatePairId) pair = report.get(s.selectedCandidatePairId) ?? pair
+    })
+    if (!pair) {
+      report.forEach((s) => { if (!pair && s.type === 'candidate-pair' && s.nominated && s.state === 'succeeded') pair = s })
+    }
+    if (!pair) return null
+    const local = report.get(pair.localCandidateId) ?? {}
+    const remote = report.get(pair.remoteCandidateId) ?? {}
+    return {
+      kind: classifyRoute(local.candidateType ?? '', remote.candidateType ?? ''),
+      local: local.candidateType ?? '',
+      remote: remote.candidateType ?? '',
+      protocol: local.protocol ?? '',
+      relayProtocol: local.candidateType === 'relay' ? (local.relayProtocol ?? '') : '',
+      serverUrl: local.url ?? '',
+    }
   }
 
   // ── マイク ─────────────────────────────────────

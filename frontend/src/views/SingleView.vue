@@ -18,6 +18,7 @@
             {{ conn.stats.value.codec }} {{ conn.stats.value.width }}×{{ conn.stats.value.height }}
             {{ conn.stats.value.fps }}fps
             <template v-if="conn.stats.value.rttMs != null"> / RTT {{ conn.stats.value.rttMs }}ms</template>
+            <template v-if="conn.stats.value.route"> / {{ routeLabel(conn.stats.value.route) }}</template>
           </span>
         </div>
         <transition name="flash"><div v-if="flash" class="stage__flash" /></transition>
@@ -193,7 +194,7 @@ import ImageDetailDialog from '@/components/ImageDetailDialog.vue'
 import ChatInput from '@/components/ChatInput.vue'
 import ChatSent from '@/components/ChatSent.vue'
 import VideoPlayer from '@/components/VideoPlayer.vue'
-import { relaySignalingUrl, useAyameConnection } from '@/composables/useAyameConnection'
+import { relaySignalingUrl, routeLabel, useAyameConnection } from '@/composables/useAyameConnection'
 import { getRoom, issueRoomTicket } from '@/composables/useRooms'
 import { useCapture } from '@/composables/useCapture'
 import { useChat } from '@/composables/useChat'

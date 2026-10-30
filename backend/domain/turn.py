@@ -56,17 +56,26 @@ def _generate(key_id: str, api_token: str) -> list[dict[str, Any]]:
     return _without_port_53(ice_servers)
 
 
-def ice_servers(config: dict[str, str]) -> list[dict[str, Any]]:
+def _urls(ice_servers: list[dict[str, Any]]) -> list[str]:
+    """ログ用。認証情報（username / credential）は出さない。"""
+    return [url for server in ice_servers for url in server.get("urls", [])]
+
+
+def ice_servers(config: dict[str, str], room: str = "") -> list[dict[str, Any]]:
     """config は servers.ice_server_config() の戻り値。サーバを編集したら（updated_at が変わったら）発行し直す。"""
     cache_key = f"turn-ice:{config['server_id']}:{config['updated_at']}"
     store = get_store()
     cached = store.get(cache_key)
     if cached is not None:
-        return json.loads(cached)
+        servers = json.loads(cached)
+        logger.info("cloudflare turn: room=%s server=%s source=cache urls=%s", room, config["server_id"], _urls(servers))
+        return servers
     try:
         servers = _generate(config["key_id"], config["api_token"])
     except (requests.RequestException, ValueError) as exc:
-        logger.warning("cloudflare turn credentials unavailable: server=%s (%s)", config["server_id"], type(exc).__name__)
+        logger.warning("cloudflare turn credentials unavailable, sending stun only: room=%s server=%s (%s)",
+                       room, config["server_id"], type(exc).__name__)
         return FALLBACK_ICE_SERVERS
     store.set(cache_key, json.dumps(servers), CACHE_SECONDS)
+    logger.info("cloudflare turn: room=%s server=%s source=issued urls=%s", room, config["server_id"], _urls(servers))
     return servers
