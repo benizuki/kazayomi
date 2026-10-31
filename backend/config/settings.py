@@ -97,7 +97,8 @@ class Settings:
     # ── デバイス（Kazami）──
     # 端末のアクセストークンの有効期間。切れたら端末は自動で認証し直す
     device_token_ttl_seconds: int = _env_int("DEVICE_TOKEN_TTL_SECONDS", default=12 * 60 * 60)
-    # 登録 QR に入れる kazayomi の URL（Kazami から届くもの）。空なら画面を開いている URL を候補にする
+    # 登録 QR に入れる kazayomi の URL（Kazami から届くもの）。https://ホスト[:ポート] の形だけ（パスは付けない）。
+    # 画面では変えられない。空なら画面を開いている URL を使う
     public_base_url: str = _env_str("PUBLIC_BASE_URL")
 
     # ── 画像の置き場（rustfs / S3 互換）──

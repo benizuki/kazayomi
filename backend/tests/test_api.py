@@ -253,3 +253,27 @@ def test_server_api_never_returns_or_logs_turn_token(client: TestClient, isolate
     listed = client.get("/api/masters/servers").text
     assert "secret-token" not in listed
     assert "secret-token" not in (isolated_storage / "audit_logs.jsonl").read_text()
+
+
+def test_enrollment_qr_uses_server_decided_api_url(client: TestClient, monkeypatch):
+    import json
+
+    from config.settings import get_settings
+    from domain import devices
+
+    login_as(principal("admin"))
+    device = devices.create_device({"name": "端末1", "room_id": make_room()["id"]})
+    path = f"/api/masters/devices/{device['id']}/enrollment"
+
+    # PUBLIC_BASE_URL があれば、それを https://ホスト の形にそろえて入れる。リクエストの Host は使わない
+    monkeypatch.setattr(get_settings(), "public_base_url", "https://kazayomi.example.com/")
+    body = client.post(path, headers={"X-Forwarded-Host": "evil.example"}).json()
+    assert body["api_url"] == "https://kazayomi.example.com"
+    assert json.loads(body["qr_text"]) == {"v": 1, "api": "https://kazayomi.example.com", "token": body["token"], "name": "端末1"}
+
+    # 無ければ今のリクエストから組み立てる。Kazami が読めない形なら、トークンを出さずに断る
+    monkeypatch.setattr(get_settings(), "public_base_url", "")
+    assert client.post(path).json()["api_url"] == "http://testserver"
+    res = client.post(path, headers={"X-Forwarded-Host": "kazayomi.example.com/evil"})
+    assert res.status_code == 400
+    assert "PUBLIC_BASE_URL" in res.json()["error"]

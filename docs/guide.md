@@ -48,7 +48,8 @@ Kazami は、映像を送る側の iPhone / iPad のカメラアプリです（k
 
 - QR には kazayomi の URL と、1 回限り・5 分で切れる登録トークンだけが入っています
 - Kazami は端末の中で署名鍵を作り（実機は Secure Enclave）、起動のたびにそれで認証します
-- QR に入れる kazayomi の URL は、iPhone から開ける URL にします（`localhost` は iPhone 自身を指します）。`PUBLIC_BASE_URL` を設定すると、それが既定になります
+- QR に入れる kazayomi の URL はサーバが決め、画面では変えられません（変えられると、よそのサーバに映像を送らせる QR を作れてしまうため）。`PUBLIC_BASE_URL` があればそれ、無ければ画面を開いている URL です。iPhone から開ける URL を `PUBLIC_BASE_URL` に設定してください（`localhost` は iPhone 自身を指します）
+- Kazami は読み取った接続先を確認の画面に出し、`https://ホスト[:ポート]` の形でないもの（パス・クエリ付きなど）は受け付けません
 - 端末をなくした・入れ替えるときは、マスター › デバイス で「登録を外す」
 
 ## 撮像の仕組み
@@ -108,7 +109,7 @@ Google でログインします。ユーザーマスターに登録されてい�
 | `APP_ENV` | production | `local` のときだけログインを省く（`backend/.env` だけに書く） |
 | `AYAME_WEBHOOK_ALLOWED_IPS` | `127.0.0.1,::1` | 認証 Webhook を呼んでよい接続元（IP か CIDR）。プロキシを通った呼び出しは接続元に関わらず断る |
 | `AYAME_WEBHOOK_SECRET` | なし | 追加で Webhook の URL の `?key=` の一致も求めるときに設定する（本番は必須） |
-| `PUBLIC_BASE_URL` | なし | 登録 QR に入れる kazayomi の URL の既定値 |
+| `PUBLIC_BASE_URL` | なし（画面を開いている URL） | 登録 QR に入れる kazayomi の URL。`https://ホスト[:ポート]` の形だけ（パスは付けない）。形が正しくなければ起動しない |
 | `DEVICE_TOKEN_TTL_SECONDS` | `43200` | Kazami のアクセストークンの有効期間 |
 | `VALKEY_URL` | なし（メモリ） | トークン類の置き場。gunicorn の worker を 2 つ以上にするなら必須 |
 | `S3_ENDPOINT_URL` | なし（`DATA_DIR` の下） | 画像の置き場（rustfs）。compose では `http://rustfs:9000` |

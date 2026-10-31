@@ -83,12 +83,13 @@
             <v-icon icon="mdi-alert-outline" />
             <span>このデバイスは登録済みです。別の端末で読み取ると、そちらに置き換わります（元の端末は認証できなくなります）。</span>
           </p>
-          <v-text-field
-            v-model="apiUrl"
-            label="kazayomi の URL（Kazami から届くもの）"
-            hint="iPhone から開ける URL にします。localhost は iPhone 自身を指すので使えません（シミュレータは可）"
-            persistent-hint
-          />
+          <template v-if="ticket">
+            <p class="meta-text">接続先 <strong>{{ ticket.api_url }}</strong>（Kazami の確認の画面にも出ます。変えるときは、サーバの PUBLIC_BASE_URL を設定します）</p>
+            <p v-if="isLoopback" class="tip tip--compact tip--warn">
+              <v-icon icon="mdi-alert-outline" />
+              <span>この接続先は iPhone 自身を指すので、実機では使えません（シミュレータは可）。サーバの PUBLIC_BASE_URL に、iPhone から開ける URL を設定してください。</span>
+            </p>
+          </template>
           <div class="qr">
             <img v-if="qrImage" :src="qrImage" alt="端末登録用の QR コード" class="qr__img">
             <v-progress-circular v-else-if="!qrError" indeterminate />
@@ -97,7 +98,7 @@
             <template v-if="remaining > 0">有効期限まで あと {{ Math.floor(remaining / 60) }}分{{ String(remaining % 60).padStart(2, '0') }}秒（1 回だけ使えます）</template>
             <template v-else-if="ticket">期限が切れました。「発行し直す」を押してください。</template>
           </p>
-          <details class="qr__raw">
+          <details v-if="qrText" class="qr__raw">
             <summary class="meta-text">QR の中身（シミュレータでは、これを貼り付けて登録できます）</summary>
             <code>{{ qrText }}</code>
             <v-btn size="small" variant="text" prepend-icon="mdi-content-copy" @click="copyQrText">コピー</v-btn>
@@ -130,7 +131,6 @@ import { copyToClipboard } from '@/composables/clipboard'
 import { formatDateTime } from '@/composables/format'
 import { useAuth } from '@/composables/useAuth'
 import { clearEnrollment, issueEnrollment, useRoomsMaster, useDevicesMaster } from '@/composables/useMasters'
-import { useStoredRef } from '@/composables/useStoredRef'
 import type { Device, DeviceInput, EnrollmentTicket } from '@/types'
 
 const headers = [
@@ -193,16 +193,18 @@ const ticket = ref<EnrollmentTicket | null>(null)
 const qrImage = ref('')
 const qrError = ref<string | null>(null)
 const issuing = ref(false)
-// 一度直した URL は次も使う（毎回 localhost に戻ると、実機で読めない QR を作ってしまう）
-const apiUrl = useStoredRef('kazayomi.enrollApiUrl', '')
 const now = ref(Date.now())
 let clock: number | undefined
 
 const remaining = computed(() => (ticket.value ? Math.max(0, Math.round((Date.parse(ticket.value.expires_at) - now.value) / 1000)) : 0))
-// QR の中身は v / api / token / name。秘密は入れない
-const qrText = computed(() => (ticket.value
-  ? JSON.stringify({ v: 1, api: apiUrl.value.trim().replace(/\/$/, ''), token: ticket.value.token, name: ticket.value.name })
-  : ''))
+// QR の中身（v / api / token / name）はサーバが組み立てる。接続先を画面で変えられると、
+// よそのサーバに映像を送らせる QR を作れてしまうため
+const qrText = computed(() => ticket.value?.qr_text ?? '')
+const isLoopback = computed(() => {
+  if (!ticket.value) return false
+  const host = new URL(ticket.value.api_url).hostname
+  return host === 'localhost' || host.endsWith('.localhost') || host.startsWith('127.')
+})
 
 watch(qrText, async (text) => {
   qrImage.value = text ? await QRCode.toDataURL(text, { errorCorrectionLevel: 'M', margin: 2, width: 320 }) : ''
@@ -214,7 +216,6 @@ async function issue(): Promise<void> {
   qrError.value = null
   try {
     ticket.value = await issueEnrollment(qrDevice.value.id)
-    if (!apiUrl.value) apiUrl.value = ticket.value.suggested_api_url
   } catch (e) {
     qrError.value = (e as Error).message
   } finally {

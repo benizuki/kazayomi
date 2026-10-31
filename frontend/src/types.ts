@@ -184,7 +184,9 @@ export interface EnrollmentTicket {
   token:             string
   name:              string
   expires_at:        string
-  suggested_api_url: string
+  // 接続先と QR の中身はサーバが決める（画面では変えない）
+  api_url:           string
+  qr_text:           string
 }
 
 export interface AuditLog {

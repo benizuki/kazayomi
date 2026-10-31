@@ -22,6 +22,7 @@ import secrets
 import sqlite3
 from datetime import timedelta
 from typing import Any
+from urllib.parse import urlsplit
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
@@ -38,6 +39,9 @@ _DEVICE_ID_PATTERN = re.compile(r"^[A-Za-z0-9-]{1,64}$")
 # 署名する中身の並び。Kazami 側（DeviceEnrollment.swift）と必ずそろえる
 _ENROLL_LABEL = b"kazayomi-enroll-v1"
 _AUTH_LABEL = b"kazayomi-auth-v1"
+# 登録 QR に入れる接続先の決まり。Kazami 側（DeviceEnrollment.swift の parse）と必ずそろえる
+_API_HOST_PATTERN = re.compile(r"^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*$")
+_API_HOST_MAX_LENGTH = 100
 
 
 class DeviceAuthError(PermissionError):
@@ -169,6 +173,37 @@ def issue_enrollment(row_id: str) -> dict[str, Any]:
     get_store().set(f"enroll:{_hash(token)}", device["id"], ENROLL_TOKEN_TTL_SECONDS)
     expires_at = now_local() + timedelta(seconds=ENROLL_TOKEN_TTL_SECONDS)
     return {"token": token, "name": device["name"], "expires_at": to_iso(expires_at)}
+
+
+def api_origin(url: str) -> str:
+    """登録 QR に入れる接続先を、https://ホスト[:ポート] の形にそろえる。
+
+    Kazami はこの形のものしか受け付けない（パス・クエリ・ユーザー名付き・日本語や長すぎるホスト名・
+    IPv6 アドレスは断る）。合わなければ ValueError。
+    """
+    text = url.strip()
+    try:
+        parts = urlsplit(text)
+        port = parts.port
+    except ValueError as exc:
+        raise ValueError("URL の形式が正しくありません。") from exc
+    scheme = parts.scheme.lower()
+    if scheme not in ("https", "http"):
+        raise ValueError("https:// か http:// で始めてください。")
+    if "?" in text or "#" in text or "@" in parts.netloc or parts.path not in ("", "/"):
+        raise ValueError("パスやクエリを付けず、https://ホスト[:ポート] の形にしてください。")
+    host = (parts.hostname or "").lower()
+    if (not text.isascii() or not host or len(host) > _API_HOST_MAX_LENGTH or not _API_HOST_PATTERN.match(host)
+            or any(len(label) > 63 for label in host.split("."))):
+        raise ValueError("ホスト名は英数字・-・. で 100 文字までにしてください（IPv6 アドレスは使えません）。")
+    return f"{scheme}://{host}" + (f":{port}" if port else "")
+
+
+def enrollment_qr_text(api_url: str, issued: dict[str, Any]) -> str:
+    """登録 QR の中身（v / api / token / name）。秘密は入れない。
+    日本語の名前を \\uXXXX にすると Kazami の長さの上限（1,024 バイト）に近づくので、そのまま入れる"""
+    payload = {"v": 1, "api": api_url, "token": issued["token"], "name": issued["name"]}
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
 def _decode_b64(value: object, label: str) -> bytes:

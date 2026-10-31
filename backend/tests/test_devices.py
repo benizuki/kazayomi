@@ -141,3 +141,31 @@ def test_device_upload_requires_a_room():
     _, kazami = _enrolled("端末1")
     with pytest.raises(ValueError, match="ルームが割り当てられていません"):
         captures.accept_device_upload(kazami.login()["access_token"], make_jpeg(), captured_at=None, source_name="")
+
+
+@pytest.mark.parametrize(("url", "expected"), [
+    ("https://kazayomi.example.com", "https://kazayomi.example.com"),
+    ("https://Kazayomi.Example.com/", "https://kazayomi.example.com"),
+    ("  http://192.168.1.10:8080  ", "http://192.168.1.10:8080"),
+])
+def test_api_origin_accepts_only_what_kazami_reads(url: str, expected: str):
+    assert devices.api_origin(url) == expected
+
+
+@pytest.mark.parametrize("url", [
+    "https://kazayomi.example.com/evil",
+    "https://kazayomi.example.com?x=1",
+    "https://kazayomi.example.com?",
+    "https://kazayomi.example.com#f",
+    "https://kazayomi.example.com@evil.example",
+    "https://" + "a" * 95 + ".com",
+    "https://例え.jp",
+    "ftp://kazayomi.example.com",
+    "http://[fe80::1]",
+    "http://kazayomi.example.com:99999",
+    "kazayomi.example.com",
+    "",
+])
+def test_api_origin_rejects_what_kazami_refuses(url: str):
+    with pytest.raises(ValueError):
+        devices.api_origin(url)

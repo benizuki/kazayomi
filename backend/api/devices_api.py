@@ -70,11 +70,13 @@ def api_delete_device(row_id: str, viewer: Viewer):
 
 @router.post("/api/masters/devices/{row_id}/enrollment")
 def api_issue_enrollment(row_id: str, request: Request, viewer: Viewer):
-    """登録 QR の中身を返す。api は Kazami から届く kazayomi の URL。"""
+    """登録 QR の中身を返す。接続先はサーバが決め、画面では変えられない
+    （変えられると、よそのサーバに映像を送らせる QR を作れてしまう）。"""
     _manageable_device(row_id, viewer)
+    api_url = _enrollment_api_url(request)
     issued = devices.issue_enrollment(row_id)
-    _audit(viewer, "device.enrollment.issue", issued["name"])
-    return {**issued, "suggested_api_url": _public_base_url(request)}
+    _audit(viewer, "device.enrollment.issue", issued["name"], f"api={api_url}")
+    return {**issued, "api_url": api_url, "qr_text": devices.enrollment_qr_text(api_url, issued)}
 
 
 @router.delete("/api/masters/devices/{row_id}/enrollment")
@@ -85,14 +87,18 @@ def api_clear_enrollment(row_id: str, viewer: Viewer):
     return device
 
 
-def _public_base_url(request: Request) -> str:
-    """Kazami から見た kazayomi の URL の候補。設定があればそれ、無ければ今のリクエストから組み立てる。"""
+def _enrollment_api_url(request: Request) -> str:
+    """Kazami から見た kazayomi の URL。PUBLIC_BASE_URL があればそれ（起動時に形を確かめてある）、
+    無ければ今のリクエストから組み立てる。"""
     configured = get_settings().public_base_url
     if configured:
-        return configured.rstrip("/")
+        return devices.api_origin(configured)
     proto = request.headers.get("x-forwarded-proto", request.url.scheme).split(",")[0].strip()
     host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
-    return f"{proto}://{host}"
+    try:
+        return devices.api_origin(f"{proto}://{host}")
+    except ValueError as exc:
+        raise ValueError(f"登録 QR に入れる kazayomi の URL を決められません。PUBLIC_BASE_URL を設定してください（{exc}）") from exc
 
 
 # ── Kazami が呼ぶ ─────────────────────────────────

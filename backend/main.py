@@ -38,7 +38,7 @@ from core.db import init_db
 from core.dev_auth import assert_safe_environment
 from core.kv import init_store
 from core.security_headers import SecurityHeadersMiddleware, set_connect_src_provider
-from domain import images, servers, users
+from domain import devices, images, servers, users
 from domain.access import ForbiddenError
 from domain.captures import CaptureAuthError
 from domain.devices import DeviceAuthError
@@ -54,6 +54,7 @@ assert_safe_environment()
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     settings = get_settings()
+    _check_public_base_url(settings.public_base_url)
     init_db(settings.data_dir / "kazayomi.db")
     images.configure(images.ImageConfig(
         thumbnail_size=settings.thumbnail_size,
@@ -66,6 +67,16 @@ async def lifespan(_: FastAPI):
     if created:
         logger.warning("bootstrap admins created: %d", len(created))
     yield
+
+
+def _check_public_base_url(url: str) -> None:
+    """登録 QR に入れる URL。Kazami が読めない形なら、QR を出すときではなく起動の時点で止める。"""
+    if not url:
+        return
+    try:
+        devices.api_origin(url)
+    except ValueError as exc:
+        raise RuntimeError(f"PUBLIC_BASE_URL が正しくありません: {exc}") from exc
 
 
 def _make_blobstore(settings):
