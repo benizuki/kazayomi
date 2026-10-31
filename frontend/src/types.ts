@@ -37,10 +37,6 @@ export interface GroupRef {
 export type AuthMode = 'google' | 'dev-bypass'
 
 export interface MeResponse {
-  /** ユーザーのマスターにいない人。使えるのは一時的なルームだけ（名前もメールアドレスも持たない） */
-  guest:       boolean
-  /** ゲストだけ。利用規約・プライバシーポリシーへの同意 */
-  consent?:    { required: boolean; version: string }
   user:        { email: string; name: string; picture: string }
   role:        Role
   permissions: Permissions
@@ -116,8 +112,6 @@ export interface GroupInput {
 export interface AppSettings {
   /** マスター › グループで新しく作るグループの容量の上限。null は無制限 */
   default_group_quota_bytes: number | null
-  /** ユーザーのマスターにいない人を、ゲスト（一時的なルームだけ）として入れるか */
-  guest_enabled: boolean
 }
 
 /** ayame: Ayame だけ（既定の STUN）。cloudflare: シグナリングは Ayame、TURN は Cloudflare で発行する */
@@ -310,28 +304,6 @@ export interface Album {
 export interface AlbumItem {
   image:    ImageRecord
   added_at: string
-}
-
-// ── ゲストの一時的なルーム ─────────────────────
-export interface GuestRoom {
-  id:            string
-  ayame_room_id: string
-  created_at:    string
-  /** 最後に使ってから ttl_seconds 後。開いたり、つないだりするたびに延びる */
-  expires_at:    string
-  ttl_seconds:   number
-  device:        { enrolled: boolean; enrolled_at: string } | null
-  /** シグナリングサーバ（既定のサーバ）が決まっているか */
-  signaling_ready: boolean
-  /** 再開コード。ログアウトしたあとや別のブラウザから、このルームに戻るときに入れる（本人にだけ見せる） */
-  resume_code: string
-}
-
-export interface GuestEnrollment {
-  token:      string
-  name:       string
-  expires_at: string
-  api:        string
 }
 
 // ── 共通のエラー形 ─────────────────────────────────

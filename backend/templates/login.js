@@ -1,14 +1,11 @@
 // ログイン画面の処理。CSP の script-src 'self' で動かすため、インラインではなくこのファイルで読む。
 //
-// - ゲスト（利用者）: Google ログインなしで、ニックネームと利用規約への同意だけで一時的なルームを使う
-// - 管理者（運営者）: Google でログインする。登録されていないアカウントでも、招待が届いていれば参加できる
+// Google でログインする。登録されていないアカウントでも、招待が届いていれば参加できる
 (function () {
   const config = document.getElementById('login-config').dataset;
   const clientId = config.clientId || '';
   const oauthConfigError = config.configError || '';
   const loginRedirect = config.redirect || '/';
-  const guestEnabled = config.guestEnabled === 'true';
-  const termsVersion = config.termsVersion || '';
   const statusEl = document.getElementById('status');
   const $ = function (id) { return document.getElementById(id); };
   const ROLE_LABELS = { owner: 'グループ管理者', editor: '編集者', viewer: '閲覧者' };
@@ -29,7 +26,7 @@
     return { ok: res.ok, data: data };
   }
 
-  // 参加・ゲストの開始が済むと、サーバーがログインした状態にしてくれるので、そのまま開く
+  // 参加が済むと、サーバーがログインした状態にしてくれるので、そのまま開く
   async function finish(url, body, busyMessage) {
     setStatus(busyMessage);
     const result = await postJson(url, body);
@@ -96,63 +93,8 @@
     }
   }
 
-  // ── ゲスト ──
-  function updateGuestButton() {
-    $('guest-start').disabled = !$('guest-nickname').value.trim() || !$('guest-agree').checked;
-  }
-
-  function updateResumeButton() {
-    $('resume-start').disabled = !$('resume-code').value.trim() || !$('resume-nickname').value.trim();
-  }
-
-  function showResume(show) {
-    $('guest').hidden = show;
-    $('resume').hidden = !show;
-    setStatus('');
-    $(show ? 'resume-code' : 'guest-nickname').focus();
-  }
-
-  if (guestEnabled) {
-    $('guest').hidden = false;
-    $('resume-open').addEventListener('click', function () { showResume(true); });
-    $('resume-back').addEventListener('click', function () { showResume(false); });
-    $('resume-code').addEventListener('input', updateResumeButton);
-    $('resume-nickname').addEventListener('input', updateResumeButton);
-    $('resume').addEventListener('submit', async function (event) {
-      event.preventDefault();
-      const button = $('resume-start');
-      button.disabled = true;
-      try {
-        await finish('/auth/guest/resume', {
-          code: $('resume-code').value,
-          nickname: $('resume-nickname').value
-        }, 'ルームに戻っています...');
-      } catch (error) {
-        setStatus(error.message, 'error');
-        updateResumeButton();
-      }
-    });
-    $('guest-nickname').addEventListener('input', updateGuestButton);
-    $('guest-agree').addEventListener('change', updateGuestButton);
-    $('guest').addEventListener('submit', async function (event) {
-      event.preventDefault();
-      const button = $('guest-start');
-      button.disabled = true;
-      try {
-        await finish('/auth/guest', {
-          nickname: $('guest-nickname').value,
-          agree: $('guest-agree').checked,
-          version: termsVersion
-        }, 'ゲストとして始めています...');
-      } catch (error) {
-        setStatus(error.message, 'error');
-        updateGuestButton();
-      }
-    });
-  }
-
   window.addEventListener('load', function () {
-    // 設定不備は黙って失敗させず、画面に理由を出す（ゲストは Google を使わないので、そのまま使える）
+    // 設定不備は黙って失敗させず、画面に理由を出す
     if (oauthConfigError) { setStatus(oauthConfigError, 'error'); return; }
     if (!clientId) { setStatus('GOOGLE_OAUTH_CLIENT_ID が設定されていないため、Google ログインを表示できません。', 'error'); return; }
     if (!window.google || !window.google.accounts || !window.google.accounts.id) {

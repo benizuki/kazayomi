@@ -74,13 +74,7 @@
           </div>
           <v-divider />
           <v-list density="compact">
-            <!-- ゲストはログアウトすると「続きから使う」Cookie も消え、いまのルームには戻れなくなる -->
-            <v-list-item
-              prepend-icon="mdi-logout"
-              title="ログアウト"
-              :subtitle="isGuest ? 'このルームには戻れなくなります' : undefined"
-              @click="logout"
-            />
+            <v-list-item prepend-icon="mdi-logout" title="ログアウト" @click="logout" />
           </v-list>
         </v-card>
       </v-menu>
@@ -88,9 +82,7 @@
 
     <!-- --app-top は上に固定した帯（開発モードの警告＋ツールバー）の高さ。画面いっぱいに使う画面が、高さの計算に使う -->
     <v-main :style="authMode === 'dev-bypass' ? 'padding-top: 78px; --app-top: 78px' : undefined">
-      <!-- ゲストには、はじめに利用規約への同意をもらう -->
-      <ConsentView v-if="me && consentRequired" />
-      <router-view v-else-if="me" />
+      <router-view v-if="me" />
       <div v-else-if="loaded" class="empty-state">
         <v-icon icon="mdi-cloud-off-outline" size="40" />
         <p>サーバーに接続できません。サーバーの状態を確認して、画面を開き直してください。</p>
@@ -103,10 +95,9 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useTheme } from 'vuetify'
 import ThemeToggle from '@/components/ThemeToggle.vue'
-import ConsentView from '@/views/ConsentView.vue'
 import { useAuth } from '@/composables/useAuth'
 import { useThemeMode } from '@/composables/useThemeMode'
 
@@ -116,16 +107,8 @@ const { effectiveTheme } = useThemeMode()
 watch(effectiveTheme, (next) => { theme.change(next) }, { immediate: true })
 
 const route = useRoute()
-const { me, loaded, user, role, permissions, groups, authMode, invitations, isGuest, consentRequired,
+const { me, loaded, user, role, permissions, groups, authMode, invitations,
   fetchMe, respondInvitation, logout } = useAuth()
-const router = useRouter()
-
-// ゲストが開けるのは自分の一時的なルームだけ。登録されている人には一時的なルームはない
-watch([isGuest, () => route.path, () => me.value], ([guest, path]) => {
-  if (!me.value) return
-  if (guest && !path.startsWith('/room')) void router.replace('/room')
-  if (!guest && path.startsWith('/room')) void router.replace('/')
-}, { immediate: true })
 
 const GROUP_ROLE_LABELS = { owner: 'グループ管理者', editor: '編集者', viewer: '閲覧者' } as const
 const inviteBusy = ref(false)
@@ -148,7 +131,6 @@ const roleLabel = computed(() => (role.value ? ROLE_LABELS[role.value] : ''))
 const initial = computed(() => (user.value?.name || user.value?.email || '?').slice(0, 1).toUpperCase())
 
 const navItems = computed(() => {
-  if (isGuest.value) return [{ to: '/room', label: 'あなたのルーム', icon: 'mdi-cctv' }]
   const items = [
     { to: '/',        label: 'ルーム',     icon: 'mdi-cctv' },
     { to: '/multi',   label: 'マルチビュー', icon: 'mdi-view-grid-outline' },

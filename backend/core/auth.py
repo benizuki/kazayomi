@@ -15,7 +15,6 @@ import html
 import json
 import logging
 import re
-import secrets
 import sys
 import time
 from pathlib import Path
@@ -30,9 +29,8 @@ from config.settings import get_settings
 from core.api_common import _request_json
 from core.audit import record_auth_login, record_operation
 from core.dev_auth import dev_auth_enabled, dev_principal
-from core.kv import get_store
-from domain import app_settings, guest_rooms, memberships, users
-from domain.access import Principal, permissions_for_role
+from domain import memberships, users
+from domain.access import Principal
 
 auth_router = APIRouter()
 TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
@@ -50,6 +48,9 @@ _GOOGLE_CLIENT_ID_RE = re.compile(r"^[0-9]+-[a-z0-9-]+\.apps\.googleusercontent\
 _DEV_SESSION_SECRET = "local-development-only-not-a-secret"
 # Google で確かめてから、招待を受ける・グループを作るまでの猶予。過ぎたらもう一度サインインしてもらう
 _ONBOARDING_WINDOW_SECONDS = 15 * 60
+# 確かめられない・登録されていない・止められている、を画面では分けない（どのアドレスが登録されているかを探られないように）。
+# 理由はログと監査ログ（管理者だけが見る）に残す
+LOGIN_FAILED = "ログインできませんでした。"
 
 
 def init_session(app) -> None:
@@ -94,16 +95,7 @@ def current_principal(request: HTTPConnection) -> Principal | None:
     if dev_auth_enabled():
         return dev_principal()
     session_user = request.session.get("user")
-    if not isinstance(session_user, dict):
-        # ログインが切れていても、ゲストの「続きから使う」Cookie があれば、同じゲストに戻す
-        return _resume_guest(request)
-    if session_user.get("guest"):
-        # ゲスト（Google ログインなし）。マスター › 設定 でゲストを止めたら、次のリクエストから入れない
-        if not session_user.get("gid") or not app_settings.guest_enabled():
-            return None
-        _keep_guest_cookie(request, session_user)
-        return guest_principal(str(session_user["gid"]), str(session_user.get("name") or "ゲスト"))
-    if not session_user.get("email"):
+    if not isinstance(session_user, dict) or not session_user.get("email"):
         return None
     client_id = google_oauth_client_id()
     stored = str(request.session.get("oauth_client_id_fingerprint") or "")
@@ -113,103 +105,6 @@ def current_principal(request: HTTPConnection) -> Principal | None:
     return users.principal_for(str(session_user["email"]))
 
 
-def guest_principal(guest_id: str, nickname: str) -> Principal:
-    """ゲスト。ログイン画面でニックネームだけを入れて始めた人。使えるのは自分の一時的なルームだけ。
-
-    guest_id はゲストを始めたときに作る乱数で、セッション（署名付きの Cookie）にだけ持つ。
-    """
-    return Principal(email="", name=nickname, role="user", permissions=permissions_for_role("user"),
-                     group_ids=frozenset(), subject=f"guest:{guest_id}")
-
-
-# ── ゲストの「続きから使う」Cookie ─────────────────────
-# ログインのセッションは 12 時間で切れるが、ゲストのルームは最後に使ってから 24 時間残る。
-# ブラウザを閉じたり、しばらくあいだが空いたりしても同じルームに戻れるように、ゲストの ID とニックネームを
-# 署名付きの Cookie に入れ、ルームと同じ長さだけ持つ。JavaScript からは読めない（HttpOnly）。
-# ルーム ID ではなくゲストの ID を入れるのは、ルーム ID だけで入れると、知っている人が誰でも入れてしまうため。
-GUEST_COOKIE = "kazayomi_guest"
-
-
-def _guest_serializer():
-    from itsdangerous import URLSafeTimedSerializer
-
-    secret = get_settings().session_secret or _DEV_SESSION_SECRET
-    return URLSafeTimedSerializer(secret, salt="kazayomi-guest-resume")
-
-
-def _read_guest_cookie(request: HTTPConnection) -> dict[str, str] | None:
-    from itsdangerous import BadSignature
-
-    raw = request.cookies.get(GUEST_COOKIE)
-    if not raw:
-        return None
-    try:
-        data = _guest_serializer().loads(raw, max_age=get_settings().guest_room_ttl_seconds)
-    except BadSignature:
-        return None
-    if not isinstance(data, dict) or not data.get("gid"):
-        return None
-    return {"gid": str(data["gid"]), "name": str(data.get("name") or "ゲスト"), "code": str(data.get("code") or "")}
-
-
-def _keep_guest_cookie(request: HTTPConnection, user: dict) -> None:
-    """応答のときに「続きから使う」Cookie を出し直してもらう（使うたびに期限が延びる）。
-
-    再開コードも入れておく。コードそのものはサーバに置かないので、本人に見せられるのはここからだけ。
-    """
-    request.state.guest_cookie = {"gid": str(user["gid"]), "name": str(user.get("name") or "ゲスト"),
-                                  "code": str(user.get("code") or "")}
-
-
-def guest_session(request: HTTPConnection) -> dict | None:
-    """ゲストのセッション（gid・name・code）。guest_api が再開コードを見せるときに使う。"""
-    user = request.session.get("user")
-    return user if isinstance(user, dict) and user.get("guest") else None
-
-
-def ensure_resume_code(request: Request, principal: Principal) -> str:
-    """再開コードを返す。まだなければ（この機能より前に始めたゲスト）作る。"""
-    user = guest_session(request)
-    if user is None:
-        return ""
-    if not user.get("code"):
-        user = {**user, "code": guest_rooms.new_resume_code()}
-        guest_rooms.register_resume_code(principal, user["code"])
-        request.session["user"] = user
-    _keep_guest_cookie(request, user)
-    return str(user["code"])
-
-
-def _resume_guest(request: HTTPConnection) -> Principal | None:
-    data = _read_guest_cookie(request)
-    if data is None or not app_settings.guest_enabled():
-        return None
-    user = {"guest": True, **data}
-    if request.scope.get("type") == "http":
-        # ログインの状態も作り直しておく（次からは Cookie を読み直さずに済む）
-        request.session["user"] = user
-    _keep_guest_cookie(request, user)
-    return guest_principal(data["gid"], data["name"])
-
-
-def apply_guest_cookie(request: Request, response) -> None:
-    """main.py のミドルウェアから呼ぶ。ゲストなら Cookie を出し直し、ログアウトなら消す。"""
-    if getattr(request.state, "guest_logout", False):
-        response.delete_cookie(GUEST_COOKIE, path="/")
-        return
-    data = getattr(request.state, "guest_cookie", None)
-    if data:
-        response.set_cookie(
-            GUEST_COOKIE, _guest_serializer().dumps(data), max_age=get_settings().guest_room_ttl_seconds,
-            path="/", httponly=True, samesite="lax", secure=get_settings().session_https_only,
-        )
-
-
-# ゲストが呼べる API。ほかの API（画像・アルバム・グループ・マスターなど）は、ここで一律に断る
-# （ゲストは所属グループを持たないので domain 層でも何も見えないが、入口でも閉じておく）
-GUEST_API_PREFIXES = ("/api/me", "/api/config", "/api/guest/")
-
-
 def require_principal(request: Request) -> Principal:
     """未ログインなら 401。ログインが要る API の依存関係に入れる。"""
     principal = current_principal(request)
@@ -217,10 +112,6 @@ def require_principal(request: Request) -> Principal:
         if request.session.get("user"):
             request.session.clear()
         raise HTTPException(status_code=401, detail={"error": "ログインが必要です。画面を開き直してください。", "login_url": "/login"})
-    if principal.is_guest and not request.url.path.startswith(GUEST_API_PREFIXES):
-        raise HTTPException(status_code=403, detail="ゲストでは使えない機能です。グループに招待してもらうか、グループを作ってください。")
-    if not principal.is_guest and request.url.path.startswith("/api/guest/"):
-        raise HTTPException(status_code=403, detail="一時的なルームはゲストだけが使えます。")
     return principal
 
 
@@ -296,15 +187,13 @@ async def login(request: Request):
         .replace("__GOOGLE_CLIENT_ID__", html.escape(client_id if not config_error else ""))
         .replace("__GOOGLE_OAUTH_CONFIG_ERROR__", html.escape(config_error))
         .replace("__LOGIN_REDIRECT__", html.escape(redirect_target))
-        .replace("__GUEST_ENABLED__", "true" if app_settings.guest_enabled() else "false")
         .replace("__LOGIN_JS_VERSION__", asset_version("login.js"))
-        .replace("__TERMS_VERSION__", html.escape(guest_rooms.TERMS_VERSION))
     )
     return HTMLResponse(page)
 
 
 # ログイン画面のスクリプトとスタイル。Cloudflare などが拡張子を見て長くキャッシュすると、更新したあとも
-# 古いものが返り、画面が動かなくなる（ゲストの欄が出ないなど）。毎回確かめさせ、URL にも中身の版を付ける
+# 古いものが返り、画面が動かなくなる。毎回確かめさせ、URL にも中身の版を付ける
 _NO_STORE_CACHE = {"Cache-Control": "no-cache"}
 
 
@@ -316,11 +205,6 @@ def asset_version(name: str) -> str:
 @auth_router.get("/auth/login.js")
 def login_script():
     return FileResponse(TEMPLATES_DIR / "login.js", media_type="text/javascript", headers=_NO_STORE_CACHE)
-
-
-@auth_router.get("/auth/legal.css")
-def legal_stylesheet():
-    return FileResponse(TEMPLATES_DIR / "legal.css", media_type="text/css", headers=_NO_STORE_CACHE)
 
 
 def _verify_google_credential(credential: str) -> dict[str, Any]:
@@ -358,7 +242,9 @@ async def auth_google(request: Request):
         user_info = _verify_google_credential(credential)
     except HTTPException as exc:
         _log_google_login(request, result="failure", status_code=exc.status_code, failure_reason=str(exc.detail))
-        raise
+        if exc.status_code >= 500:
+            raise  # 設定の不備は、運用する人が気付けるようにそのまま出す
+        raise HTTPException(status_code=exc.status_code, detail=LOGIN_FAILED) from exc
 
     email = users.normalize_email(user_info.get("email", ""))
     display_name = str(user_info.get("name") or email)
@@ -369,13 +255,12 @@ async def auth_google(request: Request):
         request.session.clear()
         if users.find_by_email(email) is not None:
             _log_google_login(request, result="failure", status_code=403, email=email, failure_reason="user_disabled")
-            raise HTTPException(status_code=403, detail=f"{email} は利用が止められています。管理者に確認してください。")
+            raise HTTPException(status_code=403, detail=LOGIN_FAILED)
         invitations = memberships.invitations_for(email)
         if not invitations:
             # 登録されていない人のメールアドレスは、記録に残さない
             _log_google_login(request, result="failure", status_code=403, failure_reason="not_registered")
-            hint = "ゲストとして試すときは、ログイン画面の「ゲストとして試す」から始めてください。" if app_settings.guest_enabled() else ""
-            raise HTTPException(status_code=403, detail=f"{email} は登録されていません。グループの管理者に招待を依頼してください。{hint}")
+            raise HTTPException(status_code=403, detail=LOGIN_FAILED)
         # 届いている招待に参加してもらう。招待は、このメールアドレスでだけ扱う（画面から送られたメールアドレスは使わない）。
         # セッションは署名付きの Cookie なので、サーバには残らない
         request.session["onboarding"] = {"email": email, "name": display_name, "verified_at": int(time.time())}
@@ -426,65 +311,6 @@ def _start_session(request: Request, email: str, name: str, *, picture: str = ""
     users.record_login(email, name)
 
 
-# ── ゲスト ───────────────────────────────────────
-_GUEST_NICKNAME_MAX = 30
-
-
-def _guest_nickname(payload: dict) -> str:
-    nickname = " ".join(str(payload.get("nickname") or "").split())
-    if not nickname:
-        raise HTTPException(status_code=400, detail="ニックネームを入力してください（本名でなくてかまいません）。")
-    if len(nickname) > _GUEST_NICKNAME_MAX:
-        raise HTTPException(status_code=400, detail=f"ニックネームは {_GUEST_NICKNAME_MAX} 文字以内にしてください。")
-    return nickname
-
-
-async def _guest_payload(request: Request) -> dict:
-    if not app_settings.guest_enabled():
-        raise HTTPException(status_code=403, detail="ゲストでの利用は受け付けていません。グループの管理者に招待を依頼してください。")
-    if "application/json" not in request.headers.get("content-type", ""):
-        raise HTTPException(status_code=415, detail="JSON で送ってください。")
-    return await _request_json(request)
-
-
-def _start_guest(request: Request, user: dict) -> None:
-    # セッション固定を避けるため、作り直す
-    request.session.clear()
-    request.session["user"] = user
-    _keep_guest_cookie(request, user)
-
-
-def _client_key(request: Request) -> str:
-    """回数の制限に使う接続元。IP アドレスはそのまま置かず、鍵付きのハッシュにする。"""
-    secret = (get_settings().session_secret or _DEV_SESSION_SECRET).encode()
-    return hmac.new(secret, client_ip(request).encode(), hashlib.sha256).hexdigest()[:32]
-
-
-@auth_router.post("/auth/guest")
-async def auth_start_guest(request: Request):
-    """ログイン画面の「ゲストとして試す」。Google ログインは使わず、ニックネームと利用規約への同意だけで始める。
-
-    サーバには何も保存しない。ゲストの ID とニックネームはセッション（署名付きの Cookie）にだけ持つ。
-    アカウントで乱用を止められないので、同じ接続元から 1 時間に始められる数を制限する。
-    """
-    payload = await _guest_payload(request)
-    nickname = _guest_nickname(payload)
-    if payload.get("agree") is not True:
-        raise HTTPException(status_code=400, detail="利用規約とプライバシーポリシーへの同意が必要です。")
-    if get_store().incr(f"guest-start:{_client_key(request)}", 3600) > get_settings().guest_starts_per_hour:
-        raise HTTPException(status_code=429, detail="ゲストを続けて始めすぎています。しばらく待ってからやり直してください。")
-
-    principal = guest_principal(secrets.token_urlsafe(16), nickname)
-    guest_rooms.consent(principal, payload.get("version"))
-    code = guest_rooms.new_resume_code()
-    guest_rooms.register_resume_code(principal, code)
-    _start_guest(request, {"guest": True, "gid": principal.subject.removeprefix("guest:"), "name": nickname, "code": code})
-    # ゲストの記録には、ニックネームも残さない
-    record_auth_login({"result": "success", "status_code": 200, "email": None, "role": "guest", "message": "guest start",
-                       "remote_ip": client_ip(request), "user_agent": request.headers.get("user-agent", "")})
-    return JSONResponse({"ok": True, "guest": True})
-
-
 @auth_router.post("/auth/onboarding/accept")
 async def auth_accept_invitation(request: Request):
     """ログイン画面で招待を受けて参加する。そのままログインした状態になる。"""
@@ -500,34 +326,10 @@ async def auth_accept_invitation(request: Request):
     return {"ok": True, "group_name": invitation["group_name"]}
 
 
-@auth_router.post("/auth/guest/resume")
-async def auth_resume_guest(request: Request):
-    """再開コードで、前のゲスト（同じルーム）に戻る。ログアウトしたあとや、別のブラウザから使う。
-
-    ニックネームはサーバに置いていないので、入れ直してもらう。コードの当て推量を防ぐため、
-    同じ接続元から 1 時間に試せる回数を制限する。
-    """
-    payload = await _guest_payload(request)
-    nickname = _guest_nickname(payload)
-    if get_store().incr(f"guest-resume:{_client_key(request)}", 3600) > get_settings().guest_resume_attempts_per_hour:
-        raise HTTPException(status_code=429, detail="再開コードを続けて試しすぎています。しばらく待ってからやり直してください。")
-    gid = guest_rooms.resolve_resume_code(payload.get("code"))
-    if gid is None:
-        raise HTTPException(status_code=404, detail="再開コードが見つかりません。コードを確かめてください（使わないまま 24 時間たつと消えます）。")
-    code = guest_rooms.normalize_resume_code(payload.get("code"))
-    code = "-".join(code[i:i + 4] for i in range(0, len(code), 4))
-    _start_guest(request, {"guest": True, "gid": gid, "name": nickname, "code": code})
-    record_auth_login({"result": "success", "status_code": 200, "email": None, "role": "guest", "message": "guest resume",
-                       "remote_ip": client_ip(request), "user_agent": request.headers.get("user-agent", "")})
-    return JSONResponse({"ok": True, "guest": True})
-
-
 @auth_router.post("/logout")
 async def logout(request: Request):
     # 個別キーの削除は消し漏れる。丸ごと消す。状態を変えるので GET では受けない
     request.session.clear()
-    # ゲストの「続きから使う」Cookie も消す（共用の PC で、次の人が前の人のルームに入らないように）
-    request.state.guest_logout = True
     return JSONResponse({"ok": True, "login_url": "/" if dev_auth_enabled() else "/login"})
 
 

@@ -89,6 +89,18 @@ function attach(): void {
   if (props.stream) video.play().catch(() => { /* 自動再生の制限。ユーザー操作のあとで再試行される */ })
 }
 
+/**
+ * 音を出す・止める。スピーカーのボタンのクリックの中から、そのまま（await を挟まずに）呼ぶこと。
+ * Safari は、ユーザーの操作の中で音を出して再生し直さないと、:muted を外しても音が出ない
+ * （Vue の更新は操作のあとに遅れて走るので、:muted の切り替えだけでは操作の外になる）
+ */
+function setMuted(muted: boolean): void {
+  const video = videoRef.value
+  if (!video) return
+  video.muted = muted
+  if (!muted && props.stream) video.play().catch(() => { /* 再生できなかったときは、次の操作で再試行される */ })
+}
+
 // ── レーザーポインター ───────────────────────────
 // 点は映像に対する割合で持ち、描くときに今の表示の位置へ直す（画面の大きさが変わってもずれない）。
 // 1 秒で消える（Kazami の画面と同じ）
@@ -186,7 +198,7 @@ onBeforeUnmount(() => {
   if (frame !== undefined) cancelAnimationFrame(frame)
 })
 
-defineExpose({ video: videoRef })
+defineExpose({ video: videoRef, setMuted })
 </script>
 
 <style scoped>
@@ -198,7 +210,11 @@ defineExpose({ video: videoRef })
   border-radius: var(--radius-md);
   background: var(--surface-inverse-deep);
 }
+/* 映像は枠いっぱいに重ねる。流れの中に置くと、映像そのものの大きさ（つないだ直後は小さく、
+   端末を回すと変わる）で枠の大きさが決まってしまい、表示が小さいままになることがある */
 .player__video {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;

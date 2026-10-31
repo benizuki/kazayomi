@@ -65,19 +65,6 @@ def _env_csv(*keys: str, default: tuple[str, ...] = ()) -> tuple[str, ...]:
 
 
 class Settings:
-    # ── ゲスト ──
-    # ログイン画面で「ゲストとして試す」を選んだ人は、ニックネームだけで一時的なルームを 1 つ使える
-    # （マスター › 設定 で止められる）。ゲストのルームの期限（最後に使ってからの秒数）
-    guest_room_ttl_seconds: int = _env_int("GUEST_ROOM_TTL_SECONDS", default=24 * 60 * 60)
-    # 同じ接続元（IP アドレス）から 1 時間に始められるゲストの数。Google ログインがないので、乱用はこれで抑える
-    guest_starts_per_hour: int = _env_int("GUEST_STARTS_PER_HOUR", default=10)
-    # 同じ接続元から 1 時間に試せる再開コードの数（当て推量を防ぐ）
-    guest_resume_attempts_per_hour: int = _env_int("GUEST_RESUME_ATTEMPTS_PER_HOUR", default=20)
-    # 利用規約・プライバシーポリシーに出す運営者の表示と問い合わせ先
-    operator_name: str = _env_str("OPERATOR_NAME", default="Benizuki")
-    # 問い合わせ先。空なら、規約とポリシーに「お問い合わせ」の節を出さない（個人情報を預からないので必須ではない）
-    operator_contact: str = _env_str("OPERATOR_CONTACT")
-
     # ── ログイン ──
     # セッション Cookie の署名鍵。本番では必須（main.py の起動時に確認する）。変えると全員ログアウトになる
     session_secret: str = _env_str("APP_SESSION_SECRET")

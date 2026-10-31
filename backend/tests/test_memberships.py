@@ -5,7 +5,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 import core.auth as auth
-from config.settings import get_settings
 from core.auth import require_principal
 from domain import groups, memberships, users
 from domain.access import ForbiddenError
@@ -35,7 +34,7 @@ def act_as(email: str) -> None:
 def test_unregistered_person_cannot_create_group_from_login(client: TestClient, monkeypatch):
     """グループを作れるのはアプリの管理者だけ。誰でも作れると、誰でもメールアドレスを登録できてしまう。"""
     res = sign_in(client, monkeypatch, "Founder@Example.com", "創設者")
-    assert res.status_code == 403 and "onboarding" not in res.json() and "登録されていません" in res.json()["error"]
+    assert res.status_code == 403 and "onboarding" not in res.json() and res.json()["error"] == "ログインできませんでした。"
     assert client.post("/auth/onboarding/group", json={"group_name": "g"}).status_code in (404, 405)
     assert users.list_users() == []
     # 登録されていない人のメールアドレスは、記録にも残さない
@@ -87,7 +86,7 @@ def test_disabled_user_gets_no_onboarding(client: TestClient, monkeypatch):
     user = users.create_user({"email": "old@example.com"})
     users.update_user(user["id"], {"enabled": False}, actor_email="admin@example.com")
     res = sign_in(client, monkeypatch, "old@example.com")
-    assert res.status_code == 403 and "onboarding" not in res.json() and "止められて" in res.json()["error"]
+    assert res.status_code == 403 and "onboarding" not in res.json() and res.json()["error"] == "ログインできませんでした。"
 
 
 # ── グループ管理者 ───────────────────────────────
@@ -349,7 +348,7 @@ def test_default_quota_for_new_groups(client: TestClient):
     users.create_user({"email": "admin@example.com", "role": "admin"})
     act_as("admin@example.com")
     # 決めていないときは 100MB
-    assert client.get("/api/masters/settings").json() == {"default_group_quota_bytes": 100 * 1024 * 1024, "guest_enabled": True}
+    assert client.get("/api/masters/settings").json() == {"default_group_quota_bytes": 100 * 1024 * 1024}
     assert client.put("/api/masters/settings", json={"default_group_quota_bytes": 5 * 1024**3}).status_code == 200
     # 管理者が作るグループは、この上限で始まる
     own = client.post("/api/masters/groups", json={"id": "x", "name": "自分の"}).json()

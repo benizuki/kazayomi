@@ -105,9 +105,5 @@ def dev_principal() -> Principal:
     principal = users.principal_for(user["email"])
     if principal is not None:
         return principal
-    if dev_role() == "guest":
-        # ゲスト（一時的なルームだけ。ニックネームは DEV_USER_NAME）として試す
-        from core.auth import guest_principal
-        return guest_principal(f"dev-{user['email']}", user["name"])
     return Principal(email=user["email"], name=user["name"], role=dev_role(),
                      permissions=dev_permissions(), group_ids=None)

@@ -59,7 +59,7 @@ const ALL_TABS = [
   { key: 'devices',  label: 'デバイス',   icon: 'mdi-cellphone-link',           perm: 'can_manage_devices', scope: 'any',
     lead: 'Kazami 端末です。登録 QR で端末を登録し、つながるルームを割り当てます。' },
   { key: 'settings', label: '設定',       icon: 'mdi-cog-outline',              perm: 'can_manage_users',   scope: 'global',
-    lead: 'アプリ全体の設定です。ゲストの受け付けと、新しく作られるグループの容量を決めます。' },
+    lead: 'アプリ全体の設定です。新しく作られるグループの容量を決めます。' },
   { key: 'audit',    label: '監査ログ',   icon: 'mdi-clipboard-text-clock-outline', perm: 'can_manage_users', scope: 'global',
     lead: 'ログインと、マスター・画像・アルバムの変更の記録です。' },
 ] as const

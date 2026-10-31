@@ -48,9 +48,9 @@ def test_unregistered_google_user_is_rejected(client: TestClient, monkeypatch):
     monkeypatch.setattr(auth, "_verify_google_credential",
                         lambda _c: {"email": "stranger@example.com", "email_verified": True, "name": "x"})
     res = client.post("/auth/google", json={"credential": "dummy"})
-    # 未登録の人は入れない（招待を受けると入れる。ゲストは別の入口。tests/test_memberships.py・test_guest.py）
+    # 未登録の人は入れない（招待を受けると入れる。tests/test_memberships.py）
     assert res.status_code == 403
-    assert "登録されていません" in res.json()["error"] and "onboarding" not in res.json()
+    assert res.json()["error"] == "ログインできませんでした。" and "onboarding" not in res.json()
     assert client.get("/api/me").status_code == 401
 
 
@@ -191,8 +191,6 @@ def test_login_assets_are_not_cached_and_versioned(client: TestClient):
     assert version, "login.js の URL に版が付いていない"
     res = client.get(f"/auth/login.js?v={version.group(1)}")
     assert res.status_code == 200 and res.headers["cache-control"] == "no-cache"
-    assert client.get("/auth/legal.css").headers["cache-control"] == "no-cache"
-    assert re.search(r'/auth/legal\.css\?v=[0-9a-f]{12}', client.get("/terms").text)
 
 
 def test_server_api_never_returns_or_logs_turn_token(client: TestClient, isolated_storage):

@@ -89,12 +89,6 @@ class Principal:
     group_ids: frozenset[str] | None = field(default=None)
     # 所属グループでの役割（group_id → owner / editor / viewer）
     group_roles: Mapping[str, str] = field(default_factory=dict)
-    # ゲスト（ユーザーのマスターにいない人）の識別子。"google:<sub>"。マスターにいる人は空
-    subject: str = ""
-
-    @property
-    def is_guest(self) -> bool:
-        return bool(self.subject)
 
     def has_global(self, key: str) -> bool:
         """全体のロールで持っているか（サーバの編集など、グループに属さないものに使う）。"""

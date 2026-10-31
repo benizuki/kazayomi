@@ -64,8 +64,9 @@ onMounted(fetchRooms)
 .section__title { margin-bottom: var(--sp-3); }
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: var(--sp-4);
+  /* 画面が狭いときは、はみ出さずに画面の幅に合わせる */
+  grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
+  gap: var(--sp-5);
 }
 .room-card { display: flex; flex-direction: column; overflow: hidden; }
 .room-card__visual {
@@ -76,6 +77,6 @@ onMounted(fetchRooms)
 .room-card__image { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform 0.2s; }
 .room-card:hover .room-card__image { transform: scale(1.03); }
 .room-card__body { display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-3) var(--sp-4) var(--sp-4); }
-.room-card__title { color: var(--ink-1); font-size: var(--fs-md); font-weight: var(--fw-bold); }
+.room-card__title { color: var(--ink-1); font-size: var(--fs-lg, var(--fs-md)); font-weight: var(--fw-bold); }
 .room-card__note { color: var(--ink-3); font-size: var(--fs-sm); white-space: pre-wrap; }
 </style>

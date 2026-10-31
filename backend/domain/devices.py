@@ -32,7 +32,7 @@ from core.kv import get_store
 from domain import rooms
 from domain.common import NotFoundError, new_id, now_local, optional_text, require_text, to_iso
 
-ENROLL_TOKEN_TTL_SECONDS = 600
+ENROLL_TOKEN_TTL_SECONDS = 300
 CHALLENGE_TTL_SECONDS = 300
 _DEVICE_ID_PATTERN = re.compile(r"^[A-Za-z0-9-]{1,64}$")
 # 署名する中身の並び。Kazami 側（DeviceEnrollment.swift）と必ずそろえる

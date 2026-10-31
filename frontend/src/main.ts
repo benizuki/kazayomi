@@ -83,7 +83,6 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/',                  component: () => import('./views/RoomListView.vue'), meta: { title: 'ルーム' } },
-    { path: '/room',              component: () => import('./views/GuestRoomView.vue'), meta: { title: 'あなたのルーム' } },
     { path: '/view/:roomId',   component: () => import('./views/SingleView.vue'),     meta: { title: '単一ビュー' } },
     { path: '/multi',             component: () => import('./views/MultiView.vue'),      meta: { title: 'マルチビュー' } },
     { path: '/library',           component: () => import('./views/LibraryView.vue'),    meta: { title: 'ライブラリ' } },

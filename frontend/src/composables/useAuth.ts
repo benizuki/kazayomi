@@ -83,10 +83,6 @@ export function useAuth() {
     groups:      computed<GroupRef[]>(() => me.value?.groups ?? []),
     authMode:    computed<AuthMode | null>(() => me.value?.auth_mode ?? null),
     globalPermissions: computed<Permissions>(() => me.value?.global_permissions ?? NO_PERMISSIONS),
-    /** ユーザーのマスターにいない人。使えるのは一時的なルームだけ */
-    isGuest:     computed(() => me.value?.guest ?? false),
-    /** ゲストで、利用規約への同意がまだ */
-    consentRequired: computed(() => !!me.value?.guest && !!me.value.consent?.required),
     invitations: computed<PendingInvitation[]>(() => me.value?.invitations ?? []),
     canIn,
     fetchMe,

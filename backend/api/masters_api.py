@@ -110,7 +110,7 @@ async def api_update_settings(request: Request, viewer: Viewer):
     viewer.require_global("can_manage_users")
     result = app_settings.update(await _request_json(request))
     _audit(viewer, "settings.update", "app",
-           f"default_group_quota_bytes={result['default_group_quota_bytes']} guest_enabled={result['guest_enabled']}")
+           f"default_group_quota_bytes={result['default_group_quota_bytes']}")
     return result
 
 

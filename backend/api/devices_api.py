@@ -14,7 +14,7 @@ from config.settings import get_settings
 from core.api_common import _request_json, read_upload
 from core.audit import record_operation
 from core.auth import Viewer, client_ip
-from domain import captures, devices, guest_rooms, rooms
+from domain import captures, devices, rooms
 
 router = APIRouter()
 
@@ -96,27 +96,11 @@ def _public_base_url(request: Request) -> str:
 
 
 # ── Kazami が呼ぶ ─────────────────────────────────
-# Kazami はグループのデバイスとして登録されることも、ゲストの一時的なルームに登録されることもある。
-# 手順は同じなので、トークンや端末の ID がどちらのものかを見て振り分ける（Kazami はどちらかを気にしない）
-
-def _is_guest_device(payload: dict) -> bool:
-    """グループのデバイスとして登録されていなければ、ゲストのルームの端末として扱う。"""
-    device_id = str(payload.get("device_id") or "")
-    row = devices._find_by_device_id(device_id) if device_id else None
-    return (row is None or not row["public_key"]) and guest_rooms.has_device(device_id)
-
 
 @router.post("/api/devices/enroll")
 async def api_enroll(request: Request):
     payload = await _request_json(request)
-    if guest_rooms.has_enrollment_token(str(payload.get("token") or "")):
-        result = guest_rooms.enroll(payload)
-        # ゲストの端末は、誰のルームかを記録に残さない
-        record_operation(actor_email="", event="device.enroll", target="guest-room", detail=f"ip={client_ip(request)}")
-        return result
     result = devices.enroll(payload, ip=client_ip(request))
-    # グループのデバイスとして登録し直した端末は、ゲストのルームから外す
-    guest_rooms.release_device(result["device_id"])
     record_operation(actor_email="", event="device.enroll", target=result["name"],
                      detail=f"device_id={result['device_id']} ip={client_ip(request)}")
     return result
@@ -125,8 +109,6 @@ async def api_enroll(request: Request):
 @router.post("/api/devices/challenge")
 async def api_challenge(request: Request):
     payload = await _request_json(request)
-    if _is_guest_device(payload):
-        return guest_rooms.issue_challenge(payload)
     return devices.issue_challenge(payload)
 
 
@@ -134,8 +116,6 @@ async def api_challenge(request: Request):
 async def api_token(request: Request):
     settings = get_settings()
     payload = await _request_json(request)
-    if _is_guest_device(payload):
-        return guest_rooms.issue_token(payload, ttl_seconds=settings.device_token_ttl_seconds)
     return devices.issue_token(
         payload,
         ttl_seconds=settings.device_token_ttl_seconds,
@@ -153,10 +133,6 @@ async def api_device_image(
     """Kazami の撮像ボタンで撮った画像。Authorization: Bearer <デバイスのアクセストークン> が必要。"""
     auth = request.headers.get("authorization", "")
     token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
-    if guest_rooms.has_access_token(token):
-        # ゲストのルームの画像は預からない。撮像は、見ている人のブラウザに直接送る
-        return JSONResponse(status_code=403, content={
-            "error": "ゲストのルームでは画像を保存しません。撮像は、ブラウザの撮像ボタンから行ってください。", "status_code": 403})
     data = await read_upload(image)
     record = captures.accept_device_upload(token, data, captured_at=capturedAt, source_name=image.filename or "")
     return JSONResponse(status_code=201, content=record)

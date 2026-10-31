@@ -11,8 +11,6 @@ from domain.common import now_local, to_iso
 DEFAULT_GROUP_QUOTA = "default_group_quota_bytes"
 # まだ画面で決めていないときの値。誰でもグループを作れるので、はじめは小さめにしておく
 INITIAL_GROUP_QUOTA_BYTES = 100 * 1024 * 1024
-# ユーザーのマスターにいない人を、ゲスト（一時的なルームだけ）として入れるか。既定は入れる
-GUEST_ENABLED = "guest_enabled"
 
 
 def _get(key: str, default: Any = None) -> Any:
@@ -48,17 +46,11 @@ def default_group_quota() -> int | None:
     return _get(DEFAULT_GROUP_QUOTA, INITIAL_GROUP_QUOTA_BYTES)
 
 
-def guest_enabled() -> bool:
-    return bool(_get(GUEST_ENABLED, True))
-
-
 def get_all() -> dict[str, Any]:
-    return {"default_group_quota_bytes": default_group_quota(), "guest_enabled": guest_enabled()}
+    return {"default_group_quota_bytes": default_group_quota()}
 
 
 def update(payload: dict[str, Any]) -> dict[str, Any]:
     if "default_group_quota_bytes" in payload:
         _set(DEFAULT_GROUP_QUOTA, parse_quota(payload["default_group_quota_bytes"]))
-    if "guest_enabled" in payload:
-        _set(GUEST_ENABLED, bool(payload["guest_enabled"]))
     return get_all()

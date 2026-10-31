@@ -2,27 +2,6 @@
   <div class="settings">
     <v-alert v-if="error" type="error" closable class="mb-3" @click:close="error = null">{{ error }}</v-alert>
 
-    <section class="panel setting" aria-labelledby="guest-title">
-      <div class="setting__text">
-        <h2 id="guest-title" class="section-title">ゲストの利用</h2>
-        <p class="meta-text">
-          ログイン画面に「ゲストとして試す」を出し、アカウントなしで、ニックネームだけで使えるようにします。
-          ゲストは一時的なルームを 1 つだけ使え、ニックネームや撮像した画像は保存しません。
-          始めるときに<a href="/terms" target="_blank" rel="noopener">利用規約</a>と<a href="/privacy" target="_blank" rel="noopener">プライバシーポリシー</a>への同意をもらいます。
-        </p>
-        <p class="meta-text">止めると、ゲストは次の操作から使えなくなります。メンバーと招待には影響しません。</p>
-      </div>
-      <v-switch
-        :model-value="settings?.guest_enabled ?? false"
-        :disabled="!settings || saving"
-        color="primary"
-        hide-details
-        inset
-        :label="settings?.guest_enabled ? '受け付ける' : '受け付けない'"
-        @update:model-value="(value) => save({ guest_enabled: !!value })"
-      />
-    </section>
-
     <section class="panel setting" aria-labelledby="quota-title">
       <div class="setting__text">
         <h2 id="quota-title" class="section-title">新しいグループの容量</h2>

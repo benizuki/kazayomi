@@ -16,7 +16,7 @@ import secrets
 from typing import Any
 
 from core.kv import get_store
-from domain import devices, guest_rooms, rooms, servers, turn
+from domain import devices, rooms, servers, turn
 from domain.access import Principal
 
 ROOM_TICKET_TTL_SECONDS = 60
@@ -35,12 +35,6 @@ def _issue(ayame_room_id: str, who: str) -> dict[str, Any]:
 def issue_room_ticket(room_id: str, viewer: Principal) -> dict[str, Any]:
     room = rooms.get_room(room_id, viewer)  # 見られないルームなら NotFoundError
     return _issue(room["ayame_room_id"], viewer.email)
-
-
-def issue_guest_ticket(viewer: Principal) -> dict[str, Any]:
-    """ゲストの自分のルームに入るチケット。ゲストはメールアドレスを持たないので、記録には残さない。"""
-    room = guest_rooms.touch(viewer)
-    return _issue(room["ayame_room_id"], viewer.email or "guest")
 
 
 def authenticate(payload: dict[str, Any]) -> dict[str, Any]:
@@ -71,8 +65,7 @@ def _decide(payload: dict[str, Any]) -> dict[str, Any]:
         return {"allowed": True, "authzMetadata": {"kind": "viewer", "email": ticket["email"]}}
 
     # Kazami のアクセストークン。期限内は何度でも使える（端末は再接続を繰り返すため）
-    # グループのデバイスか、ゲストの一時的なルームに登録した Kazami
-    device = devices.resolve_access_token(key) or guest_rooms.resolve_access_token(key)
+    device = devices.resolve_access_token(key)
     if device is None:
         return {"allowed": False, "reason": "unknown device"}
     if device["ayame_room_id"] != ayame_room_id:

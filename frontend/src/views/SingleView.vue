@@ -2,6 +2,7 @@
   <div class="single">
     <section class="stage">
       <VideoPlayer
+        ref="player"
         class="stage__player"
         :stream="conn.stream.value"
         :muted="!speakerOn"
@@ -64,7 +65,7 @@
             :color="speakerOn ? 'secondary' : undefined"
             :variant="speakerOn ? 'flat' : 'outlined'"
             :aria-label="speakerOn ? 'スピーカーを切る' : 'スピーカーを入れる'"
-            @click="speakerOn = !speakerOn"
+            @click="toggleSpeaker"
           >
             <v-icon :icon="speakerOn ? 'mdi-volume-high' : 'mdi-volume-off'" />
             <v-tooltip activator="parent" location="bottom">{{ speakerOn ? 'スピーカーを切る' : 'スピーカーを入れる' }}</v-tooltip>
@@ -233,6 +234,13 @@ const chat = useChat(conn)
 const capturer = useCapture(conn, () => roomId.value, () => config.value?.capture_token_ttl_seconds ?? 60)
 
 const speakerOn = ref(false)
+const player = ref<InstanceType<typeof VideoPlayer> | null>(null)
+
+/** Safari のため、クリックの中で直接、映像の音を出す・止める（VideoPlayer.setMuted） */
+function toggleSpeaker(): void {
+  speakerOn.value = !speakerOn.value
+  player.value?.setMuted(!speakerOn.value)
+}
 const canTalk = computed(() => conn.status.value === 'connected' && conn.remoteHasAudio.value)
 
 const isBusy = computed(() => ['connecting', 'negotiating', 'reconnecting'].includes(conn.status.value))

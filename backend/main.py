@@ -9,16 +9,14 @@
 """
 from __future__ import annotations
 
-import html
 import logging
-import re
 import os
 from urllib.parse import quote
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from starlette.middleware.cors import CORSMiddleware
 
 from api.albums_api import router as albums_router
@@ -30,18 +28,17 @@ from api.images_api import router as images_router
 from api.groups_api import router as groups_router
 from api.masters_api import router as masters_router
 from api.me_api import router as me_router
-from api.guest_api import router as guest_router
 from api.signaling_api import router as signaling_router
 from config.settings import APP_VERSION, get_settings
 from core import audit
-from core.api_common import BACKEND_DIR, FRONTEND_DIST_DIR, _frontend_index, _json_error
-from core.auth import apply_guest_cookie, asset_version, auth_router, current_principal, init_session
+from core.api_common import FRONTEND_DIST_DIR, _frontend_index, _json_error
+from core.auth import auth_router, current_principal, init_session
 from core.blobstore import LocalBlobStore, S3BlobStore, init_blobstore
 from core.db import init_db
 from core.dev_auth import assert_safe_environment
 from core.kv import init_store
 from core.security_headers import SecurityHeadersMiddleware, set_connect_src_provider
-from domain import guest_rooms, images, servers, users
+from domain import images, servers, users
 from domain.access import ForbiddenError
 from domain.captures import CaptureAuthError
 from domain.devices import DeviceAuthError
@@ -100,14 +97,6 @@ set_connect_src_provider(servers.signaling_origins)
 init_session(app)
 
 
-@app.middleware("http")
-async def guest_resume_cookie(request: Request, call_next):
-    """ゲストの「続きから使う」Cookie を、使うたびに出し直す（core/auth.py）。"""
-    response = await call_next(request)
-    apply_guest_cookie(request, response)
-    return response
-
-
 app.include_router(auth_router)
 
 # 3. CORS。同一オリジン配信なら実質不要だが、開発時の Vite から叩くために残す。
@@ -130,36 +119,6 @@ app.include_router(signaling_router)
 app.include_router(captures_router)
 app.include_router(images_router)
 app.include_router(albums_router)
-app.include_router(guest_router)
-
-# 5. 利用規約・プライバシーポリシー（ゲストに同意してもらう）。ログインしなくても読める
-def _legal_page(name: str) -> HTMLResponse:
-    settings = get_settings()
-    template = (BACKEND_DIR / "templates" / f"{name}.html").read_text(encoding="utf-8")
-    if not settings.operator_contact:
-        # 問い合わせ先を決めていなければ、「お問い合わせ」の節ごと出さない
-        template = re.sub(r"\s*<!-- contact -->.*?<!-- /contact -->", "", template, flags=re.DOTALL)
-    template = template.replace("<!-- contact -->", "").replace("<!-- /contact -->", "")
-    page = (
-        template
-        .replace("__OPERATOR__", html.escape(settings.operator_name))
-        .replace("__CONTACT__", html.escape(settings.operator_contact))
-        .replace("__VERSION__", html.escape(guest_rooms.TERMS_VERSION))
-        .replace("__AUDIT_DAYS__", str(settings.audit_log_retention_days))
-        .replace("__LEGAL_CSS_VERSION__", asset_version("legal.css"))
-    )
-    return HTMLResponse(page)
-
-
-@app.get("/terms")
-def terms_page():
-    return _legal_page("terms")
-
-
-@app.get("/privacy")
-def privacy_page():
-    return _legal_page("privacy")
-
 
 def _error_message(detail: object) -> str:
     if isinstance(detail, dict):
@@ -228,7 +187,7 @@ def healthz():
     return {"status": "ok"}
 
 
-# 6. SPA フォールバック。全パスを受けるので、必ず最後に登録する。
+# 5. SPA フォールバック。全パスを受けるので、必ず最後に登録する。
 @app.get("/{path:path}")
 def spa_fallback(path: str, request: Request):
     # API 相当のパスに index.html を返すと、フロント側は JSON パース失敗になり
