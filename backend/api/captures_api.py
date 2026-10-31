@@ -21,8 +21,8 @@ async def api_create_capture(request: Request, viewer: Viewer):
 
 
 @router.get("/{capture_id}")
-def api_capture_status(capture_id: str, viewer: Viewer):  # noqa: ARG001 - ログインの確認だけ
-    return captures.capture_status(capture_id)
+def api_capture_status(capture_id: str, viewer: Viewer):
+    return captures.capture_status(capture_id, viewer)
 
 
 @router.post("/{capture_id}/image")

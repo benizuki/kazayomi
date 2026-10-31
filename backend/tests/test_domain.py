@@ -270,7 +270,10 @@ def test_capture_flow_accepts_once():
     room = make_room(group_id="line")
     viewer = principal("user", {"line"}, email="op@example.com")
     issued = captures.create_capture({"room_id": room["id"], "tags": ["朝"], "note": "点検"}, viewer=viewer, ttl_seconds=60)
-    assert captures.capture_status(issued["capture_id"])["status"] == "pending"
+    outsider = principal("user", {"other"}, email="o@example.com")
+    assert captures.capture_status(issued["capture_id"], viewer)["status"] == "pending"
+    # 撮像 ID を知っていても、ほかのグループの人には無いものと同じに答える
+    assert captures.capture_status(issued["capture_id"], outsider)["status"] == "expired"
 
     record = captures.accept_upload(issued["capture_id"], issued["token"], make_jpeg(),
                                     captured_at="2026-10-14T09:30:00+09:00", source_name="image.jpg")
@@ -279,8 +282,9 @@ def test_capture_flow_accepts_once():
     assert record["captured_by"] == "op@example.com"
     assert record["tags"] == ["朝"] and record["note"] == "点検"
     assert record["source"] == "camera"
-    status = captures.capture_status(issued["capture_id"])
+    status = captures.capture_status(issued["capture_id"], viewer)
     assert status == {"capture_id": issued["capture_id"], "status": "done", "image_id": record["id"]}
+    assert captures.capture_status(issued["capture_id"], outsider) == {"capture_id": issued["capture_id"], "status": "expired"}
 
     with pytest.raises(CaptureAuthError, match="期限"):
         captures.accept_upload(issued["capture_id"], issued["token"], make_jpeg(), captured_at=None, source_name="")
@@ -305,7 +309,7 @@ def test_expired_capture_is_rejected():
     room = make_room()
     kv.set_store(kv.MemoryStore())
     issued = captures.create_capture({"room_id": room["id"]}, viewer=principal(), ttl_seconds=0)
-    assert captures.capture_status(issued["capture_id"])["status"] == "expired"
+    assert captures.capture_status(issued["capture_id"], principal())["status"] == "expired"
     with pytest.raises(CaptureAuthError):
         captures.accept_upload(issued["capture_id"], issued["token"], make_jpeg(), captured_at=None, source_name="")
 

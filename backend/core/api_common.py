@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import BinaryIO
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -13,6 +13,21 @@ from config.settings import get_settings
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 FRONTEND_DIST_DIR = (BACKEND_DIR.parent / "frontend" / "dist").resolve()
+
+
+def origin_allowed(origin: str, host: str) -> bool:
+    """送り元の Origin が、自分（同じホスト）か CORS で許したものか。
+
+    よそのサイトから、ログイン中の人の Cookie を使って状態を変えさせない（CSRF、Cross-Site WebSocket Hijacking 対策）。
+    同じサイトの別のサブドメインにも SameSite=Lax の Cookie は付くので、Cookie の設定だけでは防げない。
+    """
+    try:
+        parts = urlsplit(origin)
+        if parts.scheme in ("http", "https") and parts.netloc and parts.netloc == host:
+            return True
+    except ValueError:
+        pass  # "http://[" のような、URL として解けないもの
+    return origin in get_settings().allowed_origins
 
 
 def _json_error(message: str, status_code: int) -> JSONResponse:

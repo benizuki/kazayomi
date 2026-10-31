@@ -40,6 +40,44 @@ def test_login_page_escapes_redirect_and_rejects_external(client: TestClient):
     page = client.get('/login?next=/"><script>alert(1)</script>').text
     assert "<script>alert(1)" not in page
     assert 'data-redirect="/"' in client.get("/login?next=//evil.example.com").text
+    assert 'data-redirect="/"' in client.get("/login?next=%2F%5Cevil.example").text
+
+
+def test_safe_redirect_turns_anything_external_into_root():
+    from core.auth import safe_redirect
+
+    for bad in ("//evil.example", "/\\evil.example", "/\\/evil.example", "/\t/evil.example", "/\n/evil.example",
+                "/\r/evil.example", "/\x00/evil.example", "https://evil.example", "javascript:alert(1)", "", None):
+        assert safe_redirect(bad) == "/", repr(bad)
+    for ok in ("/", "/rooms", "/library?room=x&tag=%E3%81%82", "/albums#top"):
+        assert safe_redirect(ok) == ok
+
+
+def test_cross_site_writes_are_rejected(client: TestClient):
+    login_as(principal("admin"))
+    # よそのサイト（同じサイトの別のサブドメインを含む）からのログアウトの強制は 403。セッションも消さない
+    evil = client.post("/logout", headers={"Origin": "https://evil.testserver"})
+    assert evil.status_code == 403
+    assert "set-cookie" not in evil.headers
+    assert client.post("/logout", headers={"Origin": "null"}).status_code == 403
+    assert client.post("/logout", headers={"Origin": "http://["}).status_code == 403
+    # text/plain のフォームで JSON を組み立てても、Origin で止める
+    forged = client.post("/api/masters/users", content='{"email":"x@example.com","role":"admin","pad":"=1"}',
+                         headers={"Origin": "https://evil.example", "Content-Type": "text/plain"})
+    assert forged.status_code == 403
+    assert client.delete("/api/albums/x", headers={"Origin": "https://evil.example"}).status_code == 403
+    # 同じ Origin と、Origin の無いもの（Kazami・Ayame の Webhook）は通す
+    assert client.post("/logout", headers={"Origin": "http://testserver"}).status_code == 200
+    assert client.post("/logout").status_code == 200
+    # 読むだけの要求は Origin を見ない
+    assert client.get("/healthz", headers={"Origin": "https://evil.example"}).status_code == 200
+
+
+def test_cors_allowed_origin_can_write(client: TestClient, monkeypatch):
+    from config.settings import get_settings
+
+    monkeypatch.setattr(get_settings(), "allowed_origins", ("http://localhost:5173",))
+    assert client.post("/logout", headers={"Origin": "http://localhost:5173"}).status_code == 200
 
 
 def test_unregistered_google_user_is_rejected(client: TestClient, monkeypatch):
@@ -109,6 +147,14 @@ def test_capture_upload_with_bearer_token(client: TestClient):
     ok = client.post(url, files=files, data=data, headers={"Authorization": f"Bearer {issued['token']}"})
     assert ok.status_code == 201
     assert ok.json()["date_key"] == "20261014"
+
+    login_as(principal())
+    assert client.get(f"/api/captures/{issued['capture_id']}").json() == {
+        "capture_id": issued["capture_id"], "status": "done", "image_id": ok.json()["id"]}
+    # 撮像 ID を知っていても、ほかのグループの人には中身を出さない
+    login_as(principal("user", {"other"}))
+    assert client.get(f"/api/captures/{issued['capture_id']}").json() == {
+        "capture_id": issued["capture_id"], "status": "expired"}
 
 
 def test_other_groups_images_are_hidden(client: TestClient):

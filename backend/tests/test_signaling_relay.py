@@ -69,6 +69,9 @@ def test_requires_login_and_same_origin(client, monkeypatch):
     assert _close_code(client, path) == 4401
     monkeypatch.setattr(signaling_api, "current_principal", lambda _ws: principal())
     assert _close_code(client, path, origin="https://evil.example.com") == 4403
+    # URL でない Origin でも例外（500）にせず、同じように閉じる
+    assert _close_code(client, path, origin="null") == 4403
+    assert _close_code(client, path, origin="http://[") == 4403
 
 
 def test_hides_rooms_of_other_groups(client, monkeypatch):

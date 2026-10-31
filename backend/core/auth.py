@@ -19,6 +19,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import urljoin, urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from starlette.requests import HTTPConnection
@@ -163,14 +164,29 @@ def _log_google_login(request: Request, *, result: str, status_code: int, email:
 
 # ── ログイン画面 ──────────────────────────────────────
 
-def _safe_login_redirect(request: Request) -> str:
-    """ログイン後の戻り先を検証する。
+# 戻り先を URL として解くときの仮の origin。解いた結果がこの origin のままなら、同じサイトの中に留まる
+_REDIRECT_BASE = "https://kazayomi.invalid"
+_REDIRECT_FORBIDDEN_RE = re.compile(r"[\\\x00-\x1f\x7f]")
 
-    "//evil.example.com" はスキーム相対 URL として外部に飛ぶため、
-    "/" 始まりの確認だけでは足りない。オープンリダイレクトはフィッシングの踏み台になる。
+
+def safe_redirect(target: str | None) -> str:
+    """ログイン後の戻り先として安全なら、そのまま返す。外へ出うるものは "/" にする。
+
+    "//evil.example" はスキーム相対 URL、"/\\evil.example" もブラウザは "\\" を "/" と読むので外部に飛ぶ。
+    タブ・改行はブラウザが取り除くので "/\\t/evil.example" も同じ。オープンリダイレクトはフィッシングの踏み台になる。
     """
-    target = str(request.query_params.get("next") or "/")
-    return target if target.startswith("/") and not target.startswith("//") else "/"
+    value = target or "/"
+    if not value.startswith("/") or value.startswith("//") or _REDIRECT_FORBIDDEN_RE.search(value):
+        return "/"
+    try:
+        resolved = urlsplit(urljoin(_REDIRECT_BASE, value))
+    except ValueError:
+        return "/"
+    return value if f"{resolved.scheme}://{resolved.netloc}" == _REDIRECT_BASE else "/"
+
+
+def _safe_login_redirect(request: Request) -> str:
+    return safe_redirect(request.query_params.get("next"))
 
 
 @auth_router.get("/login")

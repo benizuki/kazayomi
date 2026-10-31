@@ -57,13 +57,18 @@ def create_capture(payload: dict[str, Any], *, viewer: Principal, ttl_seconds: i
     return {"capture_id": capture_id, "token": token, "expires_at": to_iso(expires_at)}
 
 
-def capture_status(capture_id: str) -> dict[str, Any]:
+def capture_status(capture_id: str, viewer: Principal) -> dict[str, Any]:
+    """撮像の進み具合。見えないグループの撮像は、無いものと同じに答える（ID を知っていても中身を出さない）。"""
     store = get_store()
     result = store.get(_result_key(capture_id))
     if result is not None:
-        return {"capture_id": capture_id, "status": "done", **json.loads(result)}
-    if store.get(_pending_key(capture_id)) is not None:
-        return {"capture_id": capture_id, "status": "pending"}
+        done = json.loads(result)
+        if viewer.can_see_group(done.get("group_id")):
+            return {"capture_id": capture_id, "status": "done", "image_id": done["image_id"]}
+    else:
+        pending = store.get(_pending_key(capture_id))
+        if pending is not None and viewer.can_see_group(json.loads(pending)["group_id"]):
+            return {"capture_id": capture_id, "status": "pending"}
     return {"capture_id": capture_id, "status": "expired"}
 
 
@@ -99,7 +104,7 @@ def accept_upload(capture_id: str, token: str, data: bytes, *, captured_at: str 
         tags=pending["tags"],
         note=pending["note"],
     )
-    store.set(_result_key(capture_id), json.dumps({"image_id": record["id"]}), _RESULT_TTL_SECONDS)
+    store.set(_result_key(capture_id), json.dumps({"image_id": record["id"], "group_id": pending["group_id"]}), _RESULT_TTL_SECONDS)
     return record
 
 

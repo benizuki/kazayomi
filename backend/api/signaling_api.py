@@ -14,14 +14,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from urllib.parse import urlsplit
-
 from fastapi import APIRouter, WebSocket
 from starlette.websockets import WebSocketDisconnect, WebSocketState
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed
 
-from config.settings import get_settings
+from core.api_common import origin_allowed
 from core.auth import current_principal
 from domain import rooms
 from domain.common import NotFoundError
@@ -40,15 +38,10 @@ _CLOSE_FORBIDDEN_ORIGIN = 4403
 def _origin_allowed(websocket: WebSocket) -> bool:
     """よそのサイトから、ログイン中の人の Cookie を使って中継を開かせない（Cross-Site WebSocket Hijacking 対策）。
 
-    WebSocket には CORS が効かないので、Origin を自分で確かめる。同じホストか、CORS で許した Origin だけ通す。
+    WebSocket には CORS が効かないので、Origin を自分で確かめる。ブラウザは必ず付けるので、無いものも通さない。
     """
     origin = websocket.headers.get("origin", "")
-    if not origin:
-        return False
-    host = websocket.headers.get("host", "")
-    if urlsplit(origin).netloc == host:
-        return True
-    return origin in get_settings().allowed_origins
+    return bool(origin) and origin_allowed(origin, websocket.headers.get("host", ""))
 
 
 @router.websocket("/api/rooms/{room_id}/signaling")

@@ -31,7 +31,7 @@ from api.me_api import router as me_router
 from api.signaling_api import router as signaling_router
 from config.settings import APP_VERSION, get_settings
 from core import audit
-from core.api_common import FRONTEND_DIST_DIR, _frontend_index, _json_error
+from core.api_common import FRONTEND_DIST_DIR, _frontend_index, _json_error, origin_allowed
 from core.auth import auth_router, current_principal, init_session
 from core.blobstore import LocalBlobStore, S3BlobStore, init_blobstore
 from core.db import init_db
@@ -99,7 +99,20 @@ init_session(app)
 
 app.include_router(auth_router)
 
-# 3. CORS。同一オリジン配信なら実質不要だが、開発時の Vite から叩くために残す。
+
+# 3. 状態を変える要求は、よそのサイトから送らせない（CSRF 対策。ログアウトの強制も含む）。ブラウザは POST などに必ず Origin を付ける。
+#    Origin が無いのはブラウザでないもの（Kazami、Ayame の認証 Webhook）で、Cookie ではなく各自のトークンや接続元で守っている。
+#    preflight（OPTIONS）は見ないので、開発時の Vite（CORS で許した Origin）からの要求はこれまでどおり通る
+@app.middleware("http")
+async def reject_cross_site_writes(request: Request, call_next):
+    origin = request.headers.get("origin")
+    if (request.method not in ("GET", "HEAD", "OPTIONS") and origin is not None
+            and not origin_allowed(origin, request.headers.get("host", ""))):
+        return _json_error("ほかのサイトからの操作は受け付けません。", 403)
+    return await call_next(request)
+
+
+# 4. CORS。同一オリジン配信なら実質不要だが、開発時の Vite から叩くために残す。
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(get_settings().allowed_origins),
@@ -108,7 +121,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 4. 業務ルータ
+# 5. 業務ルータ
 app.include_router(me_router)
 app.include_router(config_router)
 app.include_router(masters_router)
@@ -187,7 +200,7 @@ def healthz():
     return {"status": "ok"}
 
 
-# 5. SPA フォールバック。全パスを受けるので、必ず最後に登録する。
+# 6. SPA フォールバック。全パスを受けるので、必ず最後に登録する。
 @app.get("/{path:path}")
 def spa_fallback(path: str, request: Request):
     # API 相当のパスに index.html を返すと、フロント側は JSON パース失敗になり
