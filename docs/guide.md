@@ -6,6 +6,11 @@ Kazami は、映像を送る側の iPhone / iPad のカメラアプリです（k
 
 ## 手元で試す（docker compose）
 
+手元の PC で動かし、`http://<この PC の IP>:8080` で開く方法です。Google ログインは、http では `localhost` でしか使えず、IP アドレスの URL も登録できません。そのため、この方法では `APP_ENV=local` でログインを省きます。
+
+> [!WARNING]
+> `APP_ENV=local` の間は、画面を開いた人は**誰でも管理者**（開発ユーザー `dev@example.com`）として扱われます。自分の PC の中か、信頼できるネットワークの中だけで使ってください。画面の上部には常に警告が出ます。
+
 1. compose.yaml と同じ場所に `.env` を作る（`.env.sample` を写す）
 
    ```bash
@@ -14,9 +19,10 @@ Kazami は、映像を送る側の iPhone / iPad のカメラアプリです（k
 
    | 変数 | 内容 |
    |---|---|
+   | `APP_ENV` | `local`（`.env.sample` に入っている） |
+   | `PUBLIC_BASE_URL` | iPhone から開ける kazayomi の URL（例: `http://192.168.1.10:8080`）。登録 QR に入る |
+   | `DEV_SIGNALING_URL` | iPhone から届く Ayame の URL（例: `ws://192.168.1.10:3000/signaling`）。空なら `PUBLIC_BASE_URL` のホストの 3000 番 |
    | `APP_SESSION_SECRET` | 必須。`python3 -c "import secrets; print(secrets.token_urlsafe(64))"` で作る |
-   | `GOOGLE_OAUTH_CLIENT_ID` | Google Cloud Console で作る「ウェブアプリケーション」の OAuth クライアント ID。「承認済みの JavaScript 生成元」に、画面を開く URL（例: `http://192.168.1.10:8080`）を完全一致で登録する |
-   | `BOOTSTRAP_ADMIN_EMAILS` | 最初の管理者のメールアドレス。起動時に、いなければ登録する |
    | `RUSTFS_ACCESS_KEY` / `RUSTFS_SECRET_KEY` | 必須。画像の置き場（rustfs）のアクセスキー。`python3 -c "import secrets; print(secrets.token_urlsafe(24))"` で作る |
 
 2. 起動する
@@ -25,22 +31,38 @@ Kazami は、映像を送る側の iPhone / iPad のカメラアプリです（k
    docker compose up -d --build
    ```
 
-- 画面：`http://<この PC の IP>:8080`（Google でログイン）
+3. `http://<この PC の IP>:8080` を開く。初めて起動したときは、次の 3 つが作られている
+   - サーバ「ローカルの Ayame」（既定のサーバ。URL は `DEV_SIGNALING_URL`）
+   - ルーム「ローカルのルーム」（グループ `default`）
+   - デバイス「ローカルの Kazami」（上のルームに割り当て済み）
+4. マスター › デバイス で「ローカルの Kazami」の「登録 QR」を出し、Kazami の 設定 › 端末登録 で読み取る。以降はルームに自動でつながる
+
 - シグナリング：`ws://<この PC の IP>:3000/signaling`（Kazami と kazayomi がつなぐ。ブラウザは kazayomi 経由）
 - Ayame は kazayomi と同じネットワーク名前空間で動き、認証 Webhook を `http://127.0.0.1:8080` で呼びます。kazayomi は Webhook に 127.0.0.1 からの呼び出しにだけ答え、プロキシを通ったもの（`X-Forwarded-For` などが付いたもの）は断ります
 - 画像とサムネイルは rustfs（ボリューム `rustfs-data`、バケット `kazayomi`）、DB はボリューム `kazayomi-data` に入ります
 - rustfs の API（9000）とコンソール（9001）は、この PC の中（127.0.0.1）からだけ開けます。コンソールは `http://localhost:9001/rustfs/console/` です
+- 初めの 3 つは 1 回だけ作ります。消しても再起動で作り直しません。すでにサーバかルームがある DB でも作りません
 
-### 最初にすること
+## Google ログインで動かす
 
-1. 管理者でログインし、マスター › グループ を作る（`default` が最初からある）
-2. マスター › サーバ に Ayame のシグナリング URL を登録し、「既定のサーバ」にする（サーバを選んでいないルームが使う。最初に登録したサーバは既定になる）。URL は **kazayomi と Kazami の両方から届くもの**（例: `ws://192.168.1.10:3000/signaling`）。コンテナで動かすときの `localhost` はコンテナ自身を指すので使えない
-   - 既定のサーバがないと、サーバを選んでいないルームにはつなげない（画面にそう出る）
-   - 社外のネットワーク同士など、直接つながらない相手と映像をやり取りするときは、種類を「Ayame + Cloudflare TURN」にして、Cloudflare ダッシュボードの Realtime → TURN で作ったキーの ID と API トークンを入れる。入室のたびに TURN の認証情報が発行され、ブラウザと Kazami に渡る
-3. マスター › ルーム に Kazami のルームを登録する（グループとサーバを選ぶ）
-4. マスター › デバイス に Kazami 端末を追加し、ルームを割り当てて「登録 QR」を出す
-5. Kazami の 設定 › 端末登録 で QR を読み取る。以降は割り当てたルームに自動でつながる
-6. マスター › メンバー で、グループの管理者やメンバーを招待する（マスター › ユーザー でアプリ全体のロールも付けられる）
+複数の人で使うときは、Google ログインにして、人ごとにロールとグループを分けます。Google ログインには **https で開けるドメイン**が要ります（リバースプロキシや Cloudflare Tunnel などで kazayomi の 8080 番につなぐ）。
+
+1. `.env` を次のようにする
+   - `APP_ENV` の行を消す（空なら production 扱い）
+   - `GOOGLE_OAUTH_CLIENT_ID`：Google Cloud Console で作る「ウェブアプリケーション」の OAuth クライアント ID。「承認済みの JavaScript 生成元」に、画面を開く URL（例: `https://kazayomi.example.com`）を完全一致で登録する
+   - `BOOTSTRAP_ADMIN_EMAILS`：最初の管理者のメールアドレス。起動時に、いなければ登録する
+   - `PUBLIC_BASE_URL`：`https://kazayomi.example.com` のように、iPhone から開ける URL
+   - `SESSION_HTTPS_ONLY=true`
+2. `docker compose up -d --build` で起動し、管理者でログインする
+3. 最初にすること
+   1. マスター › グループ を作る（`default` が最初からある）
+   2. マスター › サーバ に Ayame のシグナリング URL を登録し、「既定のサーバ」にする（サーバを選んでいないルームが使う。最初に登録したサーバは既定になる）。URL は **kazayomi と Kazami の両方から届くもの**（例: `ws://192.168.1.10:3000/signaling`）。コンテナで動かすときの `localhost` はコンテナ自身を指すので使えない
+      - 既定のサーバがないと、サーバを選んでいないルームにはつなげない（画面にそう出る）
+      - 社外のネットワーク同士など、直接つながらない相手と映像をやり取りするときは、種類を「Ayame + Cloudflare TURN」にして、Cloudflare ダッシュボードの Realtime → TURN で作ったキーの ID と API トークンを入れる。入室のたびに TURN の認証情報が発行され、ブラウザと Kazami に渡る
+   3. マスター › ルーム に Kazami のルームを登録する（グループとサーバを選ぶ）
+   4. マスター › デバイス に Kazami 端末を追加し、ルームを割り当てて「登録 QR」を出す
+   5. Kazami の 設定 › 端末登録 で QR を読み取る。以降は割り当てたルームに自動でつながる
+   6. マスター › メンバー で、グループの管理者やメンバーを招待する（マスター › ユーザー でアプリ全体のロールも付けられる）
 
 ## Kazami（iPhone / iPad のカメラアプリ）の設定
 
@@ -49,7 +71,7 @@ Kazami は、映像を送る側の iPhone / iPad のカメラアプリです（k
 - QR には kazayomi の URL と、1 回限り・5 分で切れる登録トークンだけが入っています
 - Kazami は端末の中で署名鍵を作り（実機は Secure Enclave）、起動のたびにそれで認証します
 - QR に入れる kazayomi の URL はサーバが決め、画面では変えられません（変えられると、よそのサーバに映像を送らせる QR を作れてしまうため）。`PUBLIC_BASE_URL` があればそれ、無ければ画面を開いている URL です。iPhone から開ける URL を `PUBLIC_BASE_URL` に設定してください（`localhost` は iPhone 自身を指します）
-- Kazami は読み取った接続先を確認の画面に出し、`https://ホスト[:ポート]` の形でないもの（パス・クエリ付きなど）は受け付けません
+- Kazami は読み取った接続先を確認の画面に出し、`https://ホスト[:ポート]` か `http://ホスト[:ポート]` の形でないもの（パス・クエリ付きなど）は受け付けません
 - 端末をなくした・入れ替えるときは、マスター › デバイス で「登録を外す」
 
 ## 撮像の仕組み
@@ -106,11 +128,11 @@ Google でログインします。ユーザーマスターに登録されてい�
 | `GOOGLE_OAUTH_CLIENT_ID` | なし | Google ログインの OAuth クライアント ID |
 | `BOOTSTRAP_ADMIN_EMAILS` | なし | 起動時に管理者として登録する人（カンマ区切り） |
 | `SESSION_HTTPS_ONLY` | `false` | https で配信するときは `true` |
-| `APP_ENV` | production | `local` のときだけログインを省く（`backend/.env` か、この PC の中だけで試すときの compose 用 `.env` にだけ書く）。初めて起動したときは、サーバ・ルーム・デバイスを 1 つずつ作る |
+| `APP_ENV` | production | `local` のときだけログインを省く（「手元で試す」のとき。開いた人は誰でも管理者になる）。初めて起動したときは、サーバ・ルーム・デバイスを 1 つずつ作る |
 | `DEV_SIGNALING_URL` | なし（`PUBLIC_BASE_URL` のホストの 3000 番。それも無ければ `ws://127.0.0.1:3000/signaling`） | `APP_ENV=local` で初めて起動したときに作るサーバのシグナリング URL。Kazami から届く PC の IP にする |
 | `AYAME_WEBHOOK_ALLOWED_IPS` | `127.0.0.1,::1` | 認証 Webhook を呼んでよい接続元（IP か CIDR）。プロキシを通った呼び出しは接続元に関わらず断る |
 | `AYAME_WEBHOOK_SECRET` | なし | 追加で Webhook の URL の `?key=` の一致も求めるときに設定する（本番は必須） |
-| `PUBLIC_BASE_URL` | なし（画面を開いている URL） | 登録 QR に入れる kazayomi の URL。`https://ホスト[:ポート]` の形だけ（パスは付けない）。形が正しくなければ起動しない |
+| `PUBLIC_BASE_URL` | なし（画面を開いている URL） | 登録 QR に入れる kazayomi の URL。`https://ホスト[:ポート]` か `http://ホスト[:ポート]` の形だけ（パスは付けない）。形が正しくなければ起動しない |
 | `DEVICE_TOKEN_TTL_SECONDS` | `43200` | Kazami のアクセストークンの有効期間 |
 | `VALKEY_URL` | なし（メモリ） | トークン類の置き場。gunicorn の worker を 2 つ以上にするなら必須 |
 | `S3_ENDPOINT_URL` | なし（`DATA_DIR` の下） | 画像の置き場（rustfs）。compose では `http://rustfs:9000` |

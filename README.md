@@ -37,11 +37,13 @@ flowchart LR
 ## 手元で試す
 
 ```bash
-cp .env.sample .env   # APP_SESSION_SECRET と RUSTFS_* を埋める
+cp .env.sample .env   # APP_SESSION_SECRET・RUSTFS_*・PUBLIC_BASE_URL・DEV_SIGNALING_URL を埋める
 docker compose up -d --build
 ```
 
-`http://<この PC の IP>:8080` を開きます。最初の設定（サーバ・ルーム・デバイスの登録）は [docs/guide.md](docs/guide.md) にあります。
+`http://<この PC の IP>:8080` を開きます。http で IP を開くときは Google ログインを使えないので、`.env.sample` のとおり `APP_ENV=local` でログインを省きます（開いた人は誰でも管理者になるので、信頼できるネットワークの中だけで使ってください）。初めて起動したときにサーバ・ルーム・デバイスが 1 つずつ作られるので、マスター › デバイス から登録 QR を出して Kazami で読み取れば試せます。
+
+Google ログインで複数の人で使う手順（https のドメインが要る）は [docs/guide.md](docs/guide.md) にあります。
 
 ## 開発
 
