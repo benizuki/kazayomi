@@ -10,7 +10,8 @@ OAuth クライアント ID をまだ発行していない段階でも画面を�
   2. クラウド上の実行を検出したら**起動を止める**（設定ミスに気付かせる）
   3. 有効なときは起動ログに警告を出し、`/api/me` に `auth_mode` を載せる。
      画面上部に常時バナーが出るので、気付かずに使い続けることはできない
-  4. compose.yaml には APP_ENV を書かない（ローカルの backend/.env だけに書く）
+  4. compose.yaml には local を書かない。既定は空（production 扱い）で、local にするのは
+     この PC の中だけで試すときの .env（compose.yaml と同じ場所）か backend/.env だけ
 """
 from __future__ import annotations
 

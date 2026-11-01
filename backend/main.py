@@ -35,10 +35,10 @@ from core.api_common import FRONTEND_DIST_DIR, _frontend_index, _json_error, ori
 from core.auth import auth_router, current_principal, init_session
 from core.blobstore import LocalBlobStore, S3BlobStore, init_blobstore
 from core.db import init_db
-from core.dev_auth import assert_safe_environment
+from core.dev_auth import assert_safe_environment, dev_auth_enabled
 from core.kv import init_store
 from core.security_headers import SecurityHeadersMiddleware, set_connect_src_provider
-from domain import devices, images, servers, users
+from domain import dev_seed, devices, images, servers, users
 from domain.access import ForbiddenError
 from domain.captures import CaptureAuthError
 from domain.devices import DeviceAuthError
@@ -66,6 +66,9 @@ async def lifespan(_: FastAPI):
     created = users.ensure_bootstrap_admins(settings.bootstrap_admin_emails)
     if created:
         logger.warning("bootstrap admins created: %d", len(created))
+    # ローカルで初めて起動したときは、すぐ試せるようサーバ・ルーム・デバイスを作っておく
+    if dev_auth_enabled():
+        dev_seed.seed(settings.public_base_url)
     yield
 
 

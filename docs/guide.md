@@ -106,7 +106,8 @@ Google でログインします。ユーザーマスターに登録されてい�
 | `GOOGLE_OAUTH_CLIENT_ID` | なし | Google ログインの OAuth クライアント ID |
 | `BOOTSTRAP_ADMIN_EMAILS` | なし | 起動時に管理者として登録する人（カンマ区切り） |
 | `SESSION_HTTPS_ONLY` | `false` | https で配信するときは `true` |
-| `APP_ENV` | production | `local` のときだけログインを省く（`backend/.env` だけに書く） |
+| `APP_ENV` | production | `local` のときだけログインを省く（`backend/.env` か、この PC の中だけで試すときの compose 用 `.env` にだけ書く）。初めて起動したときは、サーバ・ルーム・デバイスを 1 つずつ作る |
+| `DEV_SIGNALING_URL` | なし（`PUBLIC_BASE_URL` のホストの 3000 番。それも無ければ `ws://127.0.0.1:3000/signaling`） | `APP_ENV=local` で初めて起動したときに作るサーバのシグナリング URL。Kazami から届く PC の IP にする |
 | `AYAME_WEBHOOK_ALLOWED_IPS` | `127.0.0.1,::1` | 認証 Webhook を呼んでよい接続元（IP か CIDR）。プロキシを通った呼び出しは接続元に関わらず断る |
 | `AYAME_WEBHOOK_SECRET` | なし | 追加で Webhook の URL の `?key=` の一致も求めるときに設定する（本番は必須） |
 | `PUBLIC_BASE_URL` | なし（画面を開いている URL） | 登録 QR に入れる kazayomi の URL。`https://ホスト[:ポート]` の形だけ（パスは付けない）。形が正しくなければ起動しない |

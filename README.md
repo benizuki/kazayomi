@@ -51,7 +51,7 @@ cd backend && cp .env.sample .env && uv sync && uv run python main.py
 cd frontend && npm install && npm run dev
 ```
 
-`http://localhost:5173` を開きます。`backend/.env` の `APP_ENV=local` で Google ログインを省けます（画面上部に警告が出ます）。
+`http://localhost:5173` を開きます。`backend/.env` の `APP_ENV=local` で Google ログインを省けます（画面上部に警告が出ます）。このとき初めて起動すると、サーバ「ローカルの Ayame」・ルーム「ローカルのルーム」・デバイス「ローカルの Kazami」を 1 つずつ作るので、マスター › デバイス から登録 QR を出すだけで試せます。Kazami から Ayame に届くよう、`DEV_SIGNALING_URL` に PC の IP（例: `ws://192.168.1.10:3000/signaling`）を入れておいてください。
 
 ```bash
 cd backend && uv run pytest

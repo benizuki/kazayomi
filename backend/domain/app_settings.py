@@ -46,6 +46,15 @@ def default_group_quota() -> int | None:
     return _get(DEFAULT_GROUP_QUOTA, INITIAL_GROUP_QUOTA_BYTES)
 
 
+def flag(key: str) -> bool:
+    """画面には出さない、内部の目印（ローカルの初期データを作ったか、など）。"""
+    return bool(_get(key, False))
+
+
+def set_flag(key: str) -> None:
+    _set(key, True)
+
+
 def get_all() -> dict[str, Any]:
     return {"default_group_quota_bytes": default_group_quota()}
 
