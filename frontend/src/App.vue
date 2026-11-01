@@ -74,10 +74,12 @@
           </div>
           <v-divider />
           <v-list density="compact">
+            <v-list-item prepend-icon="mdi-license" title="ライセンス" @click="licensesOpen = true" />
             <v-list-item prepend-icon="mdi-logout" title="ログアウト" @click="logout" />
           </v-list>
         </v-card>
       </v-menu>
+      <LicensesDialog v-model="licensesOpen" />
     </v-app-bar>
 
     <!-- --app-top は上に固定した帯（開発モードの警告＋ツールバー）の高さ。画面いっぱいに使う画面が、高さの計算に使う -->
@@ -97,6 +99,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useTheme } from 'vuetify'
+import LicensesDialog from '@/components/LicensesDialog.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import { useAuth } from '@/composables/useAuth'
 import { useThemeMode } from '@/composables/useThemeMode'
@@ -113,6 +116,7 @@ const { me, loaded, user, role, permissions, groups, authMode, invitations,
 const GROUP_ROLE_LABELS = { owner: 'グループ管理者', editor: '編集者', viewer: '閲覧者' } as const
 const inviteBusy = ref(false)
 const inviteError = ref<string | null>(null)
+const licensesOpen = ref(false)
 
 async function respond(id: string, accept: boolean): Promise<void> {
   inviteBusy.value = true

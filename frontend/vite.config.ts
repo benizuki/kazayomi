@@ -2,12 +2,15 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vuetify from 'vite-plugin-vuetify'
 import { fileURLToPath, URL } from 'node:url'
+import { thirdPartyLicenses } from './scripts/third-party-licenses'
 
 export default defineConfig({
   plugins: [
     vue(),
     // 使ったコンポーネントだけを自動で取り込む。手書きの import が不要になる。
     vuetify({ autoImport: true }),
+    // 依存パッケージのライセンス文を dist/licenses/ に書き出す（画面のメニューから開ける）
+    thirdPartyLicenses({ projectLicense: fileURLToPath(new URL('../LICENSE', import.meta.url)) }),
   ],
   resolve: {
     alias: {

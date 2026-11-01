@@ -68,3 +68,11 @@ cd frontend && npm run build   # 型チェックもする
 ## ライセンス
 
 [Apache License 2.0](LICENSE)
+
+使っているオープンソースソフトウェアのライセンス文は、ビルドのときに集めて同梱します。画面では右上のユーザーメニュー →「ライセンス」から開けます。
+
+| 対象 | 集め方 | 置き場所 |
+|---|---|---|
+| 画面（npm） | `npm run build` で、バンドルに入ったパッケージから集める | `frontend/dist/licenses/frontend.txt` |
+| サーバ（Python） | コンテナのビルドで `backend/scripts/third_party_licenses.py` を実行する | イメージの `/app/frontend/dist/licenses/backend.txt` |
+| Ayame（Go） | `deploy/ayame/Dockerfile` で、Ayame 本体・依存モジュール・Go のライセンスを集める | Ayame イメージの `/licenses/` |
