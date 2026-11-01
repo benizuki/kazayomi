@@ -37,7 +37,7 @@ flowchart LR
 ## 手元で試す
 
 ```bash
-cp .env.sample .env   # APP_SESSION_SECRET・RUSTFS_*・PUBLIC_BASE_URL・DEV_SIGNALING_URL を埋める
+cp .env.sample .env   # APP_SESSION_SECRET・RUSTFS_*・PUBLIC_BASE_URL を埋める
 docker compose up -d --build
 ```
 
@@ -53,7 +53,7 @@ cd backend && cp .env.sample .env && uv sync && uv run python main.py
 cd frontend && npm install && npm run dev
 ```
 
-`http://localhost:5173` を開きます。`backend/.env` の `APP_ENV=local` で Google ログインを省けます（画面上部に警告が出ます）。このとき初めて起動すると、サーバ「ローカルの Ayame」・ルーム「ローカルのルーム」・デバイス「ローカルの Kazami」を 1 つずつ作るので、マスター › デバイス から登録 QR を出すだけで試せます。Kazami から Ayame に届くよう、`DEV_SIGNALING_URL` に PC の IP（例: `ws://192.168.1.10:3000/signaling`）を入れておいてください。
+`http://localhost:5173` を開きます。`backend/.env` の `APP_ENV=local` で Google ログインを省けます（画面上部に警告が出ます）。このとき初めて起動すると、サーバ「ローカルの Ayame」・ルーム「ローカルのルーム」・デバイス「ローカルの Kazami」を 1 つずつ作るので、マスター › デバイス から登録 QR を出すだけで試せます。Kazami から届くよう、`backend/.env` の `PUBLIC_BASE_URL` に PC の IP の URL（例: `http://192.168.1.10:8080`）を入れておいてください。サーバの URL は、そのホストの 3000 番（`ayame-dev`）で作ります。
 
 ```bash
 cd backend && uv run pytest

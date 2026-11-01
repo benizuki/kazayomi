@@ -20,8 +20,7 @@ Kazami は、映像を送る側の iPhone / iPad のカメラアプリです（k
    | 変数 | 内容 |
    |---|---|
    | `APP_ENV` | `local`（`.env.sample` に入っている） |
-   | `PUBLIC_BASE_URL` | iPhone から開ける kazayomi の URL（例: `http://192.168.1.10:8080`）。登録 QR に入る |
-   | `DEV_SIGNALING_URL` | iPhone から届く Ayame の URL（例: `ws://192.168.1.10:3000/signaling`）。空なら `PUBLIC_BASE_URL` のホストの 3000 番 |
+   | `PUBLIC_BASE_URL` | iPhone から開ける kazayomi の URL（例: `http://192.168.1.10:8080`）。登録 QR に入り、初めに作るサーバの URL（このホストの 3000 番）にも使う |
    | `APP_SESSION_SECRET` | 必須。`python3 -c "import secrets; print(secrets.token_urlsafe(64))"` で作る |
    | `RUSTFS_ACCESS_KEY` / `RUSTFS_SECRET_KEY` | 必須。画像の置き場（rustfs）のアクセスキー。`python3 -c "import secrets; print(secrets.token_urlsafe(24))"` で作る |
 
@@ -32,7 +31,7 @@ Kazami は、映像を送る側の iPhone / iPad のカメラアプリです（k
    ```
 
 3. `http://<この PC の IP>:8080` を開く。初めて起動したときは、次の 3 つが作られている
-   - サーバ「ローカルの Ayame」（既定のサーバ。URL は `DEV_SIGNALING_URL`）
+   - サーバ「ローカルの Ayame」（既定のサーバ。URL は `PUBLIC_BASE_URL` のホストの 3000 番。例: `ws://192.168.1.10:3000/signaling`）
    - ルーム「ローカルのルーム」（グループ `default`）
    - デバイス「ローカルの Kazami」（上のルームに割り当て済み）
 4. マスター › デバイス で「ローカルの Kazami」の「登録 QR」を出し、Kazami の 設定 › 端末登録 で読み取る。以降はルームに自動でつながる
@@ -129,7 +128,6 @@ Google でログインします。ユーザーマスターに登録されてい�
 | `BOOTSTRAP_ADMIN_EMAILS` | なし | 起動時に管理者として登録する人（カンマ区切り） |
 | `SESSION_HTTPS_ONLY` | `false` | https で配信するときは `true` |
 | `APP_ENV` | production | `local` のときだけログインを省く（「手元で試す」のとき。開いた人は誰でも管理者になる）。初めて起動したときは、サーバ・ルーム・デバイスを 1 つずつ作る |
-| `DEV_SIGNALING_URL` | なし（`PUBLIC_BASE_URL` のホストの 3000 番。それも無ければ `ws://127.0.0.1:3000/signaling`） | `APP_ENV=local` で初めて起動したときに作るサーバのシグナリング URL。Kazami から届く PC の IP にする |
 | `AYAME_WEBHOOK_ALLOWED_IPS` | `127.0.0.1,::1` | 認証 Webhook を呼んでよい接続元（IP か CIDR）。プロキシを通った呼び出しは接続元に関わらず断る |
 | `AYAME_WEBHOOK_SECRET` | なし | 追加で Webhook の URL の `?key=` の一致も求めるときに設定する（本番は必須） |
 | `PUBLIC_BASE_URL` | なし（画面を開いている URL） | 登録 QR に入れる kazayomi の URL。`https://ホスト[:ポート]` か `http://ホスト[:ポート]` の形だけ（パスは付けない）。形が正しくなければ起動しない |

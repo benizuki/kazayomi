@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from urllib.parse import urlsplit
 
 from core.db import connect
@@ -25,12 +24,10 @@ DEVICE_NAME = "ローカルの Kazami"
 def signaling_url(public_base_url: str) -> str:
     """Kazami と kazayomi の両方から届く Ayame の URL。
 
-    DEV_SIGNALING_URL があればそれ。無ければ PUBLIC_BASE_URL のホストの 3000 番（compose の Ayame）。
-    どちらも無ければ 127.0.0.1 にする。画面からは見られるが、Kazami（iPhone）からは届かない。
+    PUBLIC_BASE_URL のホストの 3000 番（compose の Ayame も ayame-dev も、kazayomi と同じ PC の 3000 番）。
+    PUBLIC_BASE_URL が無ければ 127.0.0.1 にする。画面からは見られるが、Kazami（iPhone）からは届かない。
+    Ayame を別の場所に置くときは、マスター › サーバ で直す。
     """
-    configured = os.getenv("DEV_SIGNALING_URL", "").strip()
-    if configured:
-        return configured
     host = urlsplit(public_base_url).hostname if public_base_url else None
     return f"ws://{host or '127.0.0.1'}:3000/signaling"
 
@@ -52,5 +49,5 @@ def seed(public_base_url: str) -> bool:
     app_settings.set_flag(SEEDED)
     logger.warning("dev seed: created server %s (%s), room %s, device %s", server["name"], url, room["name"], DEVICE_NAME)
     if urlsplit(url).hostname in ("127.0.0.1", "localhost"):
-        logger.warning("dev seed: Kazami から %s には届きません。DEV_SIGNALING_URL か マスター › サーバ で PC の IP にしてください", url)
+        logger.warning("dev seed: Kazami から %s には届きません。PUBLIC_BASE_URL を設定するか、マスター › サーバ で PC の IP にしてください", url)
     return True

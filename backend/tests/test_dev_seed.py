@@ -4,9 +4,8 @@ from __future__ import annotations
 from domain import dev_seed, devices, rooms, servers
 
 
-def test_seed_creates_server_room_and_device(monkeypatch):
-    monkeypatch.setenv("DEV_SIGNALING_URL", "ws://192.168.1.10:3000/signaling")
-    assert dev_seed.seed("") is True
+def test_seed_creates_server_room_and_device():
+    assert dev_seed.seed("http://192.168.1.10:8080") is True
 
     server = servers.default_server()
     assert server is not None and server["signaling_url"] == "ws://192.168.1.10:3000/signaling"
@@ -17,8 +16,7 @@ def test_seed_creates_server_room_and_device(monkeypatch):
     assert device["room_id"] == room["id"]
 
 
-def test_seed_runs_only_once_even_after_deleting(monkeypatch):
-    monkeypatch.delenv("DEV_SIGNALING_URL", raising=False)
+def test_seed_runs_only_once_even_after_deleting():
     assert dev_seed.seed("") is True
     # 画面で消しても、再起動で作り直さない
     for d in devices.list_devices():
@@ -37,7 +35,6 @@ def test_seed_skips_when_servers_exist():
     assert [s["name"] for s in servers.list_servers()] == ["既存"]
 
 
-def test_signaling_url_fallbacks(monkeypatch):
-    monkeypatch.delenv("DEV_SIGNALING_URL", raising=False)
+def test_signaling_url_fallbacks():
     assert dev_seed.signaling_url("https://kazayomi.example:8443") == "ws://kazayomi.example:3000/signaling"
     assert dev_seed.signaling_url("") == "ws://127.0.0.1:3000/signaling"

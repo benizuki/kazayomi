@@ -32,8 +32,6 @@ services:
       AYAME_WEBHOOK_SECRET: ${AYAME_WEBHOOK_SECRET:-}
       # 登録 QR に入れる kazayomi の URL（Kazami から届くもの）。http(s)://ホスト[:ポート] の形だけ。空なら画面を開いている URL
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
-      # APP_ENV=local で初めて起動したときに作るサーバの URL（Kazami から届くもの）。空なら PUBLIC_BASE_URL のホストの 3000 番
-      DEV_SIGNALING_URL: ${DEV_SIGNALING_URL:-}
       # ログイン。APP_SESSION_SECRET と GOOGLE_OAUTH_CLIENT_ID は .env（compose.yaml と同じ場所）に書く
       # 既定は production 扱い（空）。手元で試すとき（http で IP を開くので Google ログインは使えない）は .env に APP_ENV=local と書く
       APP_ENV: ${APP_ENV:-}
