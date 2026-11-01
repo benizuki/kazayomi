@@ -226,7 +226,7 @@ Ayame の呼び方にそろえて「ルーム」と呼ぶ（以前は「チャ�
 
 ## Ayame の認証（ルームを守る）
 
-Ayame の `authn_webhook_url` を `http://127.0.0.1:8080/api/ayame/authn` に向ける。Ayame は kazayomi と同じネットワーク名前空間で動かす（compose の `network_mode: service:kazayomi`）。
+Ayame の `authn_webhook_url` を `http://127.0.0.1:8080/api/ayame/authn` に向ける。Ayame は kazayomi と同じネットワーク名前空間で動かす（compose では、名前空間とポートだけを持つ `net` コンテナに両方を `network_mode: service:net` で同居させる。片方を作り直しても、もう片方が切れないようにするため）。
 
 - Webhook は `AYAME_WEBHOOK_ALLOWED_IPS`（既定 127.0.0.1・::1）からの呼び出しにだけ答え、それ以外には 403 を返す
 - 転送のヘッダー（`X-Forwarded-For`・`Forwarded`・`X-Real-IP`）が付いた呼び出しは、接続元に関わらず断る。同じホストのリバースプロキシを通った外からのリクエストも 127.0.0.1 に見えるため

@@ -38,7 +38,7 @@ Kazami は、映像を送る側の iPhone / iPad のカメラアプリです（k
 4. マスター › デバイス で「ローカルの Kazami」の「登録 QR」を出し、Kazami の 設定 › 端末登録 で読み取る。以降はルームに自動でつながる
 
 - シグナリング：`ws://<この PC の IP>:3000/signaling`（Kazami と kazayomi がつなぐ。ブラウザは kazayomi 経由）
-- Ayame は kazayomi と同じネットワーク名前空間で動き、認証 Webhook を `http://127.0.0.1:8080` で呼びます。kazayomi は Webhook に 127.0.0.1 からの呼び出しにだけ答え、プロキシを通ったもの（`X-Forwarded-For` などが付いたもの）は断ります
+- Ayame は kazayomi と同じネットワーク名前空間（`net` コンテナが持つ。ポート 8080・3000 もここで公開する）で動き、認証 Webhook を `http://127.0.0.1:8080` で呼びます。`.env` を変えて kazayomi だけ作り直されても、Ayame は切れません。kazayomi は Webhook に 127.0.0.1 からの呼び出しにだけ答え、プロキシを通ったもの（`X-Forwarded-For` などが付いたもの）は断ります
 - 画像とサムネイルは rustfs（ボリューム `rustfs-data`、バケット `kazayomi`）、DB はボリューム `kazayomi-data` に入ります
 - rustfs の API（9000）とコンソール（9001）は、この PC の中（127.0.0.1）からだけ開けます。コンソールは `http://localhost:9001/rustfs/console/` です
 - 初めの 3 つは 1 回だけ作ります。消しても再起動で作り直しません。すでにサーバかルームがある DB でも作りません

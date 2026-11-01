@@ -1,16 +1,23 @@
-# kazayomi 一式（kazayomi・Ayame・Valkey）をまとめて起動する。
+# kazayomi 一式（kazayomi・Ayame・Valkey・rustfs）をまとめて起動する。
 #   docker compose up -d --build
 # 画面: http://<この PC の IP>:8080 / シグナリング: ws://<この PC の IP>:3000/signaling
 #
 # 開発時（kazayomi をコンテナの外で uv run するとき）は、Ayame・Valkey・rustfs だけを起動する:
 #   docker compose --profile dev up -d ayame-dev valkey rustfs
 services:
+  # kazayomi と Ayame が同居するネットワーク名前空間と、公開するポートだけを持つ（何もしない pause コンテナ）。
+  # 名前空間の持ち主を kazayomi にすると、kazayomi だけ作り直したとき（.env を変えて up -d したときなど）に
+  # Ayame が古い名前空間に取り残され、Ayame に届かなくなる。持ち主をほとんど作り直さないこのコンテナにして避ける
+  net:
+    image: registry.k8s.io/pause:3.10
+    ports:
+      - "8080:8080"   # kazayomi
+      - "3000:3000"   # Ayame
+    restart: unless-stopped
+
   kazayomi:
     build: .
-    ports:
-      - "8080:8080"
-      # Ayame は kazayomi と同じネットワーク名前空間で動くので、Ayame のポートもここで公開する
-      - "3000:3000"
+    network_mode: "service:net"
     environment:
       TZ: Asia/Tokyo
       DATA_DIR: /data
@@ -37,16 +44,16 @@ services:
       CORS_ALLOWED_ORIGINS: http://localhost:8080
     volumes:
       - kazayomi-data:/data
-    depends_on: [valkey, rustfs]
+    depends_on: [net, valkey, rustfs]
     restart: unless-stopped
 
   ayame:
     build: ./deploy/ayame
     # kazayomi と同じネットワーク名前空間に入れる。認証 Webhook を http://127.0.0.1:8080 で呼べるので、
     # kazayomi を公開しても Webhook は外から呼べない（kazayomi は 127.0.0.1 からの呼び出しにだけ答える）。
-    # kazayomi のコンテナを作り直したら、Ayame も作り直される（docker compose up -d で一緒に直る）
-    network_mode: "service:kazayomi"
-    depends_on: [kazayomi]
+    # どちらか片方を作り直しても、もう片方は切れない（名前空間の持ち主は net）
+    network_mode: "service:net"
+    depends_on: [net, kazayomi]
     volumes:
       - ./deploy/ayame/config.ini:/config.ini:ro
     restart: unless-stopped
