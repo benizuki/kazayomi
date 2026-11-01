@@ -8,6 +8,8 @@
 
 現場に置いた Kazami（iPhone / iPad）の映像をブラウザで確認し、音声でやり取りし、撮像した静止画を蓄積して、気に入った画像をアルバム（学習用データセット）にまとめる。
 
+自分のサーバ（手元の PC や社内のサーバ）で docker compose で動かすセルフホスト版。ゲストなど、外の人に開く機能は持たない。
+
 名前は「風読み」から。風見（Kazami）が示すものを読み取る側、という意味。
 
 ## システム構成
@@ -15,13 +17,16 @@
 ```
 [Kazami (iPhone)] ──Ayame P2P（映像・音声・DataChannel）── [ブラウザ: kazayomi の画面]
         │                                                          │
-        └──── 静止画を HTTP でアップロード ────▶ [kazayomi サーバー（1 コンテナ）]
-                                                  FastAPI ＋ Vue の配信
-                                                  data/ … SQLite・画像・サムネイル
+        └──── 静止画を HTTP でアップロード ────▶ [kazayomi]  FastAPI ＋ Vue の配信、SQLite
+                                                  [Ayame]     シグナリング（kazayomi と同じネットワーク名前空間）
+                                                  [Valkey]    トークン類
+                                                  [rustfs]    画像・サムネイル（S3 互換）
 ```
 
+- docker compose の 1 つの構成で動かす。公開するポートは kazayomi の 8080 と Ayame の 3000。Ayame と kazayomi は、名前空間とポートだけを持つ `net` コンテナに同居する
+
 - Vue 3 / Vuetify / TypeScript / Vite ＋ FastAPI（uv で依存を管理）
-- 画像は rustfs（S3 互換、`rustfs/rustfs:1.0.2`）に、キー `images/YYYYMMDD/<id>.jpg`、サムネイルは `thumbs/<id>.jpg` で置く
+- 画像は rustfs（S3 互換、`rustfs/rustfs:1.0.4`）に、キー `images/YYYYMMDD/<id>.jpg`、サムネイルは `thumbs/<id>.jpg` で置く
   - ブラウザには rustfs を直接見せず、kazayomi が読んで返す（閲覧のたびにログインとグループの権限を確かめるため。ブラウザから rustfs に届かなくてよい）
   - `S3_ENDPOINT_URL` が未設定なら、同じキーで `DATA_DIR` の下に置く（テストと、手早く試すとき用）
   - ローカルのディスクから移すときは `backend/scripts/migrate_images_to_s3.py`
@@ -71,7 +76,7 @@ rustfs のバケットは全グループで 1 つなので、rustfs の機能で
 |---|---|---|---|---|---|---|
 | サーバ名 | name | text | ✓ | ✓ | ✓ | 一意 |
 | シグナリングURL | signaling_url | text | ✓ | ✓ |  | ws:// か wss://。kazayomi と Kazami の両方から届く URL（ブラウザは kazayomi 経由） |
-| 種類 | kind | enum(ayame,cloudflare) | ✓ | ✓ |  | 既定=ayame。cloudflare はシグナリングは Ayame のまま、TURN の認証情報を Cloudflare で発行して渡す |
+| 種類 | kind | enum(ayame,cloudflare) | ✓ | ✓ |  | 既定=ayame。cloudflare はシグナリングは Ayame のまま、TURN の認証情報を Cloudflare（外部のサービス）で発行して渡す。社外のネットワーク同士など、P2P で届かない相手とつなぐときだけ使う |
 | TURN キー ID | turn_key_id | text |  | ✓ |  | kind=cloudflare のとき必須。Cloudflare の Realtime → TURN のキー |
 | API トークン | turn_api_token | text |  |  |  | kind=cloudflare のとき必須。API では返さない（`turn_api_token_set` だけ）。空で保存すると今の値のまま。監査ログにも残さない |
 | メモ | note | longtext |  |  |  | |
@@ -182,7 +187,7 @@ Ayame の呼び方にそろえて「ルーム」と呼ぶ（以前は「チャ�
   - ZIP 書き出し: アルバムの画像をフォルダを作らずにまとめる（ファイル名は撮像日時・ルーム名・画像 ID）
 - **マスター**（`/masters/<members|users|groups|servers|rooms|devices|audit>`）— 権限のあるタブだけを出す。グループ管理者にはメンバー・ルーム・デバイスだけを出し、自分のグループのものだけを扱わせる
   - デバイスでは登録 QR（5 分・1 回限り）を出す。QR に入れる kazayomi の URL はサーバが決める（`PUBLIC_BASE_URL`、無ければ画面を開いている URL）。画面では変えられない
-- **ログイン**（`/login`）— Google でサインイン（未登録のアカウントでも、招待が届いていれば参加できる）。開発時は `APP_ENV=local` で省き、画面上部に警告を出す
+- **ログイン**（`/login`）— Google でサインイン（未登録のアカウントでも、招待が届いていれば参加できる）。`APP_ENV=local` のときは省き、画面上部に警告を出す
 
 ## ログイン
 
@@ -200,7 +205,10 @@ Ayame の呼び方にそろえて「ルーム」と呼ぶ（以前は「チャ�
   - 移行前からいる人のグループでの役割は閲覧者にしてあり、全体のロールで今までどおり動く
 - **招待**: グループ管理者がマスター › メンバーでメールアドレスと役割を指定する。メールは送らないので、画面に出る案内文（ログイン画面の URL とアドレス）を本人に伝える。14 日で切れる。登録済みの人には、画面右上の封筒のボタンに届き、そこで参加するか断るかを選ぶ
 - 作成・招待・参加・役割の変更・外すことは、すべて監査ログに残す
-- `APP_ENV=local` のときだけログインを省く。クラウド上でこの設定のまま起動しようとすると起動を止める
+- `APP_ENV=local` のときだけログインを省く。開いた人は誰でも開発ユーザー（`DEV_USER_EMAIL`、既定は管理者）として扱う。クラウド上でこの設定のまま起動しようとすると起動を止める
+  - 使うのは開発と、手元で試すとき。Google ログインは http では `localhost` でしか使えず、IP アドレスの URL も登録できないので、`http://<PC の IP>:8080` で開く手元の環境では使えない
+  - 初めて起動したときは、すぐ試せるよう、既定のサーバ（`PUBLIC_BASE_URL` のホストの 3000 番の Ayame）・ルーム・デバイスを 1 つずつ作る。作るのは 1 回だけ（`app_settings` に記録し、消しても作り直さない）。サーバかルームがすでにある DB では作らない
+- Google ログインで動かすには、https で開けるドメインが要る（リバースプロキシや Cloudflare Tunnel などで 8080 番につなぐ）
 
 ## 端末登録と設定の配信
 
@@ -277,7 +285,7 @@ Ayame の取り決めどおり HTTP は常に 200 で返し、可否は `allowed
 | `hello` | Kazami → ブラウザ | `app`（"kazami"）、`version`、`deviceName`、`capabilities`（例: `["capture", "captureDirect", "camera", "pointer", "chat"]`） |
 | `capture` | ブラウザ → Kazami | `captureId`、`token` |
 | `captureResult` | Kazami → ブラウザ | `captureId`、`ok`、`imageId`（成功時）、`message`（失敗時） |
-| `captureDirect` | ブラウザ → Kazami | `captureId`。画像を kazayomi に送らず、DataChannel でブラウザに渡す撮像（Cloudflare 版のゲストのルームで使う。この版の画面からは送らない） |
+| `captureDirect` | ブラウザ → Kazami | `captureId`。画像を kazayomi に送らず、DataChannel でブラウザに渡す撮像。Kazami は対応しているが、この版の画面からは送らない（ゲストのルーム向けのもので、この版にはゲストがない） |
 | `captureChunk` | Kazami → ブラウザ | `captureId`、`index`、`count`、`data`（JPEG の Base64 を 48K 文字ずつに分けたもの）。送りきれていない量が 1MB を超えたら待つ |
 | `captureDone` | Kazami → ブラウザ | `captureId`、`ok`、`width`・`height`・`size`・`capturedAt`（成功時）、`message`（失敗時）。ブラウザは受け取った分をつないで JPEG にし、`kazami-YYYYMMDD-HHMMSS.jpg` でダウンロードさせる |
 | `cameraGet` | ブラウザ → Kazami | なし。`cameraState` が返る |
@@ -324,8 +332,8 @@ RTT は DataChannel の往復ではなく、WebRTC の統計（選ばれた候�
 
 - 利用者: 数名、同時利用 数名
 - 件数の見込み: 1 日数百枚、累計数万枚 → **保存方式: SQLite（メタデータ）＋ rustfs（画像・サムネイル）**
-- デプロイ先: 未定（ローカル / 社内サーバーで docker compose）。後日 GCE COS なども検討
-- ログイン: Google（ユーザーマスターに登録した人だけ）
+- デプロイ先: 手元の PC か社内のサーバで docker compose
+- ログイン: Google（ユーザーマスターに登録した人だけ。https のドメインが要る）。手元で試すときは `APP_ENV=local` で省く
 - 削除の扱い: 物理削除（確認ダイアログを出す）
 - 既存データの移行: スキーマの版（PRAGMA user_version）で順に当てる。v2 でカメラをチャネルに改めて既定のグループに入れ、v4 でチャネルをルームに改めた（`channels` → `rooms`、`room_id` → `ayame_room_id`、`channel_id` → `room_id`）
 - 通知: 不要
@@ -350,8 +358,9 @@ RTT は DataChannel の往復ではなく、WebRTC の統計（選ばれた候�
 | M4 | Ayame の認証 Webhook（デバイスのトークンとブラウザの入室チケット） |
 | C1 | DataChannel でのカメラの遠隔操作（倍率・フォーカス・色合い・露出）、本番（k3s） |
 | G1 | グループごとの役割と招待、グループの削除、容量の上限、既定のサーバ |
-| G2 | ゲスト（ニックネームだけで一時的なルーム、ブラウザへの撮像、再開コード）、利用規約・プライバシーポリシー。のちに Cloudflare 版（kazayomi for Cloudflare）へ移し、この版からは外した |
+| G2 | ゲスト（ニックネームだけで一時的なルーム、ブラウザへの撮像、再開コード）、利用規約・プライバシーポリシー。のちに別の版へ移し、この版からは外した（O1） |
 | O1 | オンプレミス専用にする。ゲスト・利用規約・プライバシーポリシーを外し、ログインの失敗のメッセージを 1 つにまとめる。登録 QR は 5 分 |
+| O2 | 公開の準備。手元で試す手順（`APP_ENV=local` と初期データ）、compose の `net` コンテナ、第三者のライセンス文の同梱 |
 
 ## セキュリティ
 
@@ -366,5 +375,5 @@ RTT は DataChannel の往復ではなく、WebRTC の統計（選ばれた候�
 ## 決めていないこと
 
 - 撮像の解像度 — Kazami の取り込み設定（最大 1920x1080）のフレームを使う。高解像度が要るなら `AVCapturePhotoOutput` を後で足す
-- TURN — STUN のみ。NAT を越えられないときに coturn などを検討する
-- 自己署名の https — iPhone から自己署名の https に送る場合は、Kazami の証明書ピン留めを使う（本番は Cloudflare の https なので要らない）
+- TURN — 既定は STUN のみ。外部のサービスに頼れるなら Cloudflare TURN（サーバの種類 cloudflare）を使える。外に出したくないなら coturn などを Ayame と並べて置くことを検討する
+- https — Google ログインには https のドメインが要る。自己署名の証明書で配信する場合、iPhone から送るときは Kazami の証明書ピン留めを使う（公的な証明書なら要らない）
