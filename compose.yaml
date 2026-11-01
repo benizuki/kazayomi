@@ -72,7 +72,7 @@ services:
   # 画像の置き場（S3 互換）。
   # API（9000）とコンソール（9001）は、この PC の中からだけ届くようにする（kazayomi はコンテナ間でつなぐ）
   rustfs:
-    image: rustfs/rustfs:1.0.2
+    image: rustfs/rustfs:1.0.4
     command: ["/data"]
     environment:
       RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?RUSTFS_ACCESS_KEY を .env に設定してください}
