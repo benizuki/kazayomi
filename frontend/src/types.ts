@@ -319,10 +319,6 @@ export type ControlMessage =
   | { type: 'hello'; app: string; version?: string; deviceName?: string; capabilities?: string[] }
   | { type: 'capture'; captureId: string; token: string }
   | { type: 'captureResult'; captureId: string; ok: boolean; imageId?: string; message?: string }
-  // ゲストのルーム: 画像をサーバに送らず、DataChannel でブラウザに直接受け取る
-  | { type: 'captureDirect'; captureId: string }
-  | { type: 'captureChunk'; captureId: string; index: number; count: number; data: string }
-  | { type: 'captureDone'; captureId: string; ok: boolean; width?: number; height?: number; size?: number; capturedAt?: string; message?: string }
   // レーザーポインター。映像の上の位置（0〜1）を Kazami に送り、Kazami の画面に重ねて出す
   | { type: 'pointer'; x: number; y: number; color: string }
   // 文字のメッセージ。Kazami の画面に吹き出しで出し、出したら chatRead を返す

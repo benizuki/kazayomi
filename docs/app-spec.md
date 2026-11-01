@@ -285,9 +285,6 @@ Ayame の取り決めどおり HTTP は常に 200 で返し、可否は `allowed
 | `hello` | Kazami → ブラウザ | `app`（"kazami"）、`version`、`deviceName`、`capabilities`（例: `["capture", "captureDirect", "camera", "pointer", "chat"]`） |
 | `capture` | ブラウザ → Kazami | `captureId`、`token` |
 | `captureResult` | Kazami → ブラウザ | `captureId`、`ok`、`imageId`（成功時）、`message`（失敗時） |
-| `captureDirect` | ブラウザ → Kazami | `captureId`。画像を kazayomi に送らず、DataChannel でブラウザに渡す撮像。Kazami は対応しているが、この版の画面からは送らない（ゲストのルーム向けのもので、この版にはゲストがない） |
-| `captureChunk` | Kazami → ブラウザ | `captureId`、`index`、`count`、`data`（JPEG の Base64 を 48K 文字ずつに分けたもの）。送りきれていない量が 1MB を超えたら待つ |
-| `captureDone` | Kazami → ブラウザ | `captureId`、`ok`、`width`・`height`・`size`・`capturedAt`（成功時）、`message`（失敗時）。ブラウザは受け取った分をつないで JPEG にし、`kazami-YYYYMMDD-HHMMSS.jpg` でダウンロードさせる |
 | `cameraGet` | ブラウザ → Kazami | なし。`cameraState` が返る |
 | `cameraSet` | ブラウザ → Kazami | `zoom`（倍）、`focus`（0: 近い〜1: 遠い、か `"auto"`）、`focusPoint`（`{x, y}`。ブラウザで見ている映像の上の位置を 0〜1 で。その位置にフォーカスと露出を合わせる）、`whiteBalance`（色温度 K、か `"auto"`）、`exposure`（露出補正 EV）。指定したものだけ変える |
 | `cameraState` | Kazami → ブラウザ | `adjustable`、`camera`（例: "広角 1920x1080 30fps"）、`zoom`・`maxZoom`・`zoomPresets`、`focus`・`manualFocus`、`whiteBalance`・`manualWhiteBalance`・`whiteBalanceRange`、`exposure`・`exposureRange`。オートのものは `null`。DataChannel がつながったとき、`cameraSet` のあと、Kazami の画面で調整したとき（0.2 秒落ち着いてから）に送る |
@@ -295,6 +292,7 @@ Ayame の取り決めどおり HTTP は常に 200 で返し、可否は `allowed
 | `chat` | ブラウザ → Kazami | `id`、`text`（200 文字まで）、`from`（送った人の名前）。Kazami はプレビューの下のほうに吹き出しで出し、振動と音で知らせる。4 通まで並べ、30 秒で（タップで先に）消す |
 | `chatRead` | Kazami → ブラウザ | `id`。`chat` を画面に出したら返す。ブラウザは送った吹き出しに「既読」を付ける |
 
+Kazami は、画像を kazayomi に送らず DataChannel でブラウザに渡す撮像（`captureDirect`・`captureChunk`・`captureDone`）にも対応しているが、ゲストのルーム向けのもので、この版では使わない。
 知らない `type` は無視する。`capabilities` に `"camera"` が無い Kazami には、カメラの調整を出さない。`"pointer"` が無い Kazami には、ポインターのボタンを出さない。`"chat"` が無い Kazami には、メッセージを送れない（入力欄を使えなくする）。
 ブラウザはスライダーを動かしている間、`cameraSet` を 0.12 秒ごとにまとめて送る（送りすぎて詰まらないように）。
 RTT は DataChannel の往復ではなく、WebRTC の統計（選ばれた候補ペアの `currentRoundTripTime`）から出す。
