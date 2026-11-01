@@ -17,7 +17,7 @@ import logging
 from fastapi import APIRouter, WebSocket
 from starlette.websockets import WebSocketDisconnect, WebSocketState
 from websockets.asyncio.client import connect
-from websockets.exceptions import ConnectionClosed
+from websockets.exceptions import ConnectionClosed, WebSocketException
 
 from core.api_common import origin_allowed
 from core.auth import current_principal
@@ -72,7 +72,9 @@ async def relay(websocket: WebSocket, signaling_url: str) -> None:
     try:
         async with connect(signaling_url, open_timeout=5, ping_interval=None, max_size=2**20) as upstream:
             await _relay(websocket, upstream)
-    except (OSError, asyncio.TimeoutError, ConnectionClosed) as exc:
+    # WebSocketException には、つながっても HTTP の応答が返らないとき（InvalidMessage）も入る。
+    # compose で kazayomi だけ作り直し、Ayame が古いネットワーク名前空間に残ったときに起きる
+    except (OSError, asyncio.TimeoutError, WebSocketException) as exc:
         logger.warning("signaling upstream unreachable: %s (%s)", signaling_url, type(exc).__name__)
         if websocket.client_state == WebSocketState.CONNECTED:
             await websocket.close(code=_CLOSE_UPSTREAM_UNREACHABLE)

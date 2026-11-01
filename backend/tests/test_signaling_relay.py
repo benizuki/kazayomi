@@ -87,3 +87,37 @@ def test_reports_unreachable_ayame(client, monkeypatch):
     room = rooms.create_room({"name": "A", "ayame_room_id": "room-a", "group_id": "default", "server_id": server["id"]})
     monkeypatch.setattr(signaling_api, "current_principal", lambda _ws: principal())
     assert _close_code(client, f"/api/rooms/{room['id']}/signaling") == 4502
+
+
+@pytest.fixture
+def silent_port():
+    """TCP はつながるが、何も返さずに閉じる（Docker のポート転送の先に Ayame がいないときと同じ）。"""
+    import socket
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    sock.listen()
+    stop = threading.Event()
+
+    def serve_forever():
+        sock.settimeout(0.2)
+        while not stop.is_set():
+            try:
+                conn, _ = sock.accept()
+                conn.close()
+            except OSError:
+                pass
+
+    thread = threading.Thread(target=serve_forever, daemon=True)
+    thread.start()
+    yield sock.getsockname()[1]
+    stop.set()
+    thread.join(5)
+    sock.close()
+
+
+def test_reports_ayame_that_returns_no_http_response(client, monkeypatch, silent_port):
+    from domain import rooms
+    server = servers.create_server({"name": "stale", "signaling_url": f"ws://127.0.0.1:{silent_port}/signaling"})
+    room = rooms.create_room({"name": "A", "ayame_room_id": "room-a", "group_id": "default", "server_id": server["id"]})
+    monkeypatch.setattr(signaling_api, "current_principal", lambda _ws: principal())
+    assert _close_code(client, f"/api/rooms/{room['id']}/signaling") == 4502
